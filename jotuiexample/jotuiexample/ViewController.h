@@ -17,7 +17,7 @@
 @interface ViewController : UIViewController <JotViewDelegate, UIPopoverControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate> {
     
     JotView* displayView;
-    IBOutlet JotView* jotView; // WritingPad
+    JotView* writtingPad; 
     
     Pen* pen;
     Marker* marker;

@@ -56,7 +56,7 @@ struct ColorlessVertex {
 @property(nonatomic, readonly) CGPoint startPoint;
 @property(nonatomic, readonly) CGPoint endPoint;
 @property(nonatomic, readonly) CGRect bounds;
-@property(nonatomic, readonly) CGFloat smoothness;
+
 @property(nonatomic, strong) JotBufferManager* bufferManager;
 @property(nonatomic, readonly) int fullByteSize;
 @property(nonatomic, readonly) CGFloat extraLengthWithoutDot;
@@ -66,6 +66,8 @@ struct ColorlessVertex {
 @property(nonatomic, readonly) UIColor* previousColor;
 @property(nonatomic, readonly) CGFloat previousWidth;
 @property(nonatomic, readonly) CGFloat previousRotation;
+
+@property(nonatomic, assign) CGFloat smoothness;
 
 - (CGFloat)lengthOfElement;
 - (CGFloat)angleOfStart;

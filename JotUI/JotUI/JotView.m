@@ -1795,7 +1795,6 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         
         for (AbstractBezierPathElement* newElement in elements) {
             AbstractBezierPathElement* prevElement = [stroke.segments lastObject];
-            //            NSLog(@"point %@",NSStringFromCGPoint(newElement.startPoint));
             AbstractBezierPathElement* element;
             if (CGSizeEqualToSize(CGSizeZero, ratio.offset) &&
                 CGPointEqualToPoint(CGPointZero, ratio.scale)) {
@@ -1803,7 +1802,6 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
             }else {
                 CGPoint ratioPoint = CGPointMake((newElement.startPoint.x) * ratio.scale.x, (newElement.startPoint.y) * ratio.scale.y);
                 ratioPoint = CGPointMake(ratioPoint.x - ratio.offset.width, ratioPoint.y + ratio.offset.height);
-                //                NSLog(@"ratioPoint %@",NSStringFromCGPoint(ratioPoint));
                 element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
                 element.color = newElement.color;
                 element.width = newElement.width;

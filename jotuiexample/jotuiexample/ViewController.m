@@ -63,20 +63,20 @@
         _jotViewContainer.bounces = NO;
         [self.view addSubview:_jotViewContainer];
         
-        jotView = [[JotView alloc] initWithFrame:(CGRect){CGPointZero,CGSizeMake(displaySize.width * highlightRatio, displaySize.height *highlightRatio)}];
-        jotView.delegate = self;
-        [_jotViewContainer addSubview:jotView];
+        writtingPad = [[JotView alloc] initWithFrame:(CGRect){CGPointZero,CGSizeMake(displaySize.width * highlightRatio, displaySize.height *highlightRatio)}];
+        writtingPad.delegate = self;
+        [_jotViewContainer addSubview:writtingPad];
         
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
         paperState.delegate = self;
-        [paperState loadJotStateAsynchronously:NO withSize:jotView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:jotView.context andBufferManager:[JotBufferManager sharedInstance]];
-        [jotView loadState:paperState];
+        [paperState loadJotStateAsynchronously:NO withSize:writtingPad.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:writtingPad.context andBufferManager:[JotBufferManager sharedInstance]];
+        [writtingPad loadState:paperState];
         
         [self changePenType:nil];
         
         [self tappedColorButton:blackButton];
         
-        _jotViewContainer.contentSize = jotView.mj_size;
+        _jotViewContainer.contentSize = writtingPad.mj_size;
         _jotViewContainer.contentOffset = CGPointZero;
     }
     
@@ -104,6 +104,8 @@
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
         [_highlightView addGestureRecognizer:pan];
     }
+    
+    [self.view bringSubviewToFront:additionalOptionsView];
 }
 
 - (void)didReceiveMemoryWarning {
@@ -235,7 +237,7 @@
 
 
 - (IBAction)saveImage {
-    [jotView exportImageTo:[self jotViewStateInkPath] andThumbnailTo:[self jotViewStateThumbPath] andStateTo:[self jotViewStatePlistPath] withThumbnailScale:[[UIScreen mainScreen] scale] onComplete:^(UIImage* ink, UIImage* thumb, JotViewImmutableState* state) {
+    [writtingPad exportImageTo:[self jotViewStateInkPath] andThumbnailTo:[self jotViewStateThumbPath] andStateTo:[self jotViewStatePlistPath] withThumbnailScale:[[UIScreen mainScreen] scale] onComplete:^(UIImage* ink, UIImage* thumb, JotViewImmutableState* state) {
         UIImageWriteToSavedPhotosAlbum(thumb, nil, nil, nil);
         dispatch_async(dispatch_get_main_queue(), ^{
             UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Saved" message:@"The JotView's state has been saved to disk, and a full resolution image has been saved to the photo album." preferredStyle:UIAlertControllerStyleAlert];
@@ -246,10 +248,10 @@
 }
 
 - (IBAction)loadImageFromLibary:(UIButton*)sender {
-    [[jotView state] setIsForgetful:YES];
+    [[writtingPad state] setIsForgetful:YES];
     JotViewStateProxy* state = [[JotViewStateProxy alloc] initWithDelegate:self];
-    [state loadJotStateAsynchronously:NO withSize:jotView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:jotView.context andBufferManager:[JotBufferManager sharedInstance]];
-    [jotView loadState:state];
+    [state loadJotStateAsynchronously:NO withSize:writtingPad.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:writtingPad.context andBufferManager:[JotBufferManager sharedInstance]];
+    [writtingPad loadState:state];
     
     UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Loaded" message:@"The JotView's state been loaded from disk." preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"Ok" style:UIAlertActionStyleDefault handler:nil]];
@@ -312,15 +314,18 @@
 }
 
 - (IBAction)undo {
+    [writtingPad undo];
     [displayView undo];
 }
 
 - (IBAction)redo {
+    [writtingPad redo];
     [displayView redo];
 }
 
 - (IBAction)clearScreen:(id)sender {
-    [jotView clear:YES];
+    [displayView clear:YES];
+    [writtingPad clear:YES];
 }
 
 
@@ -338,35 +343,35 @@
     return [[self activePen] supportsRotation];
 }
 
-- (NSArray*)willAddElements:(NSArray*)elements toStroke:(JotStroke*)stroke fromPreviousElement:(AbstractBezierPathElement*)previousElement inJotView:(JotView*)jotView {
+- (NSArray*)willAddElements:(NSArray*)elements toStroke:(JotStroke*)stroke fromPreviousElement:(AbstractBezierPathElement*)previousElement inJotView:(JotView*)writtingPad {
     
     // Project the stroke on the displayView by ratio
     CGFloat scaleX = _highlightView.bounds.size.width / _jotViewContainer.bounds.size.width;
     CGFloat scaleY = _highlightView.bounds.size.height / _jotViewContainer.bounds.size.height;
-//    JotElementsRatio ratio = {CGSizeMake(- _highlightView.frame.origin.x, (displayView.bounds.size.height - (jotView.bounds.size.height * scaleY)) - _highlightView.frame.origin.y), CGPointMake(scaleX, scaleY)};
+//    JotElementsRatio ratio = {CGSizeMake(- _highlightView.frame.origin.x, (displayView.bounds.size.height - (writtingPad.bounds.size.height * scaleY)) - _highlightView.frame.origin.y), CGPointMake(scaleX, scaleY)};
     JotElementsRatio ratio = {CGSizeZero, CGPointMake(scaleX, scaleY)};
     [displayView addElements:elements withTexture:[self activePen].texture ratio:ratio];
     
-    return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:jotView];
+    return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:writtingPad];
 }
 
-- (BOOL)willBeginStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
-    [[self activePen] willBeginStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+- (BOOL)willBeginStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
+    [[self activePen] willBeginStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
     return YES;
 }
 
-- (void)willMoveStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
-    [[self activePen] willMoveStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+- (void)willMoveStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
+    [[self activePen] willMoveStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
-- (void)willEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch shortStrokeEnding:(BOOL)shortStrokeEnding inJotView:(JotView*)jotView {
+- (void)willEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch shortStrokeEnding:(BOOL)shortStrokeEnding inJotView:(JotView*)writtingPad {
     // noop
 }
 
-- (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
+- (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     
     [displayView.state finishCurrentStroke];
-//    [jotView undo];
+//    [writtingPad undo];
 //    _jotViewContainer.image = [self displayViewSnapshotImage];
 }
 
@@ -396,26 +401,26 @@
 //    return newImage;
 //}
 
-- (void)willCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
-    [[self activePen] willCancelStroke:stroke withCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+- (void)willCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
+    [[self activePen] willCancelStroke:stroke withCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
-- (void)didCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
-    [[self activePen] didCancelStroke:stroke withCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+- (void)didCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
+    [[self activePen] didCancelStroke:stroke withCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
-- (UIColor*)colorForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
+- (UIColor*)colorForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     [[self activePen] setShouldUseVelocity:!pressureVsVelocityControl || pressureVsVelocityControl.selectedSegmentIndex];
-    return [[self activePen] colorForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+    return [[self activePen] colorForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
-- (CGFloat)widthForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
+- (CGFloat)widthForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     [[self activePen] setShouldUseVelocity:!pressureVsVelocityControl || pressureVsVelocityControl.selectedSegmentIndex];
-    return [[self activePen] widthForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+    return [[self activePen] widthForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
-- (CGFloat)smoothnessForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
-    return [[self activePen] smoothnessForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+- (CGFloat)smoothnessForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
+    return [[self activePen] smoothnessForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
 #pragma mark - UIPopoverControllerDelegate

@@ -106,11 +106,11 @@
                                                                        andCurveTo:point2
                                                                       andControl1:CGPointMake(ctrl1_x, ctrl1_y)
                                                                       andControl2:CGPointMake(ctrl2_x, ctrl2_y)];
-        //        element.smoothness = smoothFactor;
+        element.smoothness = smoothFactor;
         return element;
     } else if (point2.x == -CGFLOAT_MAX) {
         AbstractBezierPathElement *element = [MoveToPathElement elementWithMoveTo:point3];
-        //        element.smoothness = smoothFactor;
+        element.smoothness = smoothFactor;
         return element;
     }
     
