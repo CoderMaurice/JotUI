@@ -31,7 +31,7 @@ static float clamp(min, max, value) {
         maxSize = _maxSize;
         minAlpha = _minAlpha;
         maxAlpha = _maxAlpha;
-
+        
         defaultMinSize = minSize;
         defaultMaxSize = maxSize;
         color = [UIColor blackColor];
@@ -40,7 +40,7 @@ static float clamp(min, max, value) {
 }
 
 - (id)init {
-    return [self initWithMinSize:6.0 andMaxSize:15.0 andMinAlpha:0.9 andMaxAlpha:0.9];
+    return [self initWithMinSize:3 andMaxSize:3.5 andMinAlpha:1 andMaxAlpha:1];
 }
 
 - (JotBrushTexture*)texture {
@@ -48,7 +48,7 @@ static float clamp(min, max, value) {
 }
 
 - (CGFloat)stepWidthForStroke {
-    return 2;
+    return 0.5;
 }
 
 - (BOOL)supportsRotation {
@@ -91,12 +91,12 @@ static float clamp(min, max, value) {
     CGFloat duration = [[NSDate date] timeIntervalSinceDate:lastDate];
     // velocity is distance/time
     CGFloat velocityMagnitude = distanceFromPrevious / duration;
-
+    
     // we need to make sure we keep velocity inside our min/max values
     float clampedVelocityMagnitude = clamp(VELOCITY_CLAMP_MIN, VELOCITY_CLAMP_MAX, velocityMagnitude);
     // now normalize it, so we return a value between 0 and 1
     float normalizedVelocity = (clampedVelocityMagnitude - VELOCITY_CLAMP_MIN) / (VELOCITY_CLAMP_MAX - VELOCITY_CLAMP_MIN);
-
+    
     return normalizedVelocity;
 }
 
@@ -185,15 +185,15 @@ static float clamp(min, max, value) {
     if (numberOfTouches > 4) {
         numberOfTouches = 4;
     }
-
+    
     CGFloat dur = [[NSDate date] timeIntervalSinceDate:lastDate];
-
+    
     if (dur > .01) {
         // require small duration, otherwise the pts/sec calculation can vary wildly
         if ([self velocityForTouch:touch]) {
             velocity = [self velocityForTouch:touch];
         }
-
+        
         lastDate = [NSDate date];
         lastLoc = [touch preciseLocationInView:nil];
     }

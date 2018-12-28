@@ -18,19 +18,19 @@
 @interface Pen : NSObject <JotViewDelegate> {
     CGFloat defaultMinSize;
     CGFloat defaultMaxSize;
-
+    
     CGFloat minSize;
     CGFloat maxSize;
     CGFloat minAlpha;
     CGFloat maxAlpha;
-
+    
     int numberOfTouches;
     CGFloat velocity;
     CGPoint lastLoc;
     NSDate* lastDate;
-
+    
     BOOL shouldUseVelocity;
-
+    
     UIColor* color;
 }
 

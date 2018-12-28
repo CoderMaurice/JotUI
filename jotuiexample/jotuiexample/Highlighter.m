@@ -62,7 +62,7 @@
 }
 
 - (CGFloat)stepWidthForStroke {
-    return 2;
+    return 1;
 }
 
 - (BOOL)supportsRotation {

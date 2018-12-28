@@ -15,37 +15,40 @@
 
 
 @interface ViewController : UIViewController <JotViewDelegate, UIPopoverControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate> {
-    IBOutlet JotView* jotView;
+    
+    JotView* disPlayView;
+    IBOutlet JotView* jotView; // WritingPad
+    
     Pen* pen;
     Marker* marker;
     Eraser* eraser;
     Highlighter* highlighter;
-
+    
     UIPopoverController* popoverController;
-
+    
     IBOutlet UISegmentedControl* pressureVsVelocityControl;
     IBOutlet UISegmentedControl* penVsMarkerControl;
-
-
+    
+    
     IBOutlet UILabel* minAlpha;
     IBOutlet UILabel* maxAlpha;
     IBOutlet UILabel* minWidth;
     IBOutlet UILabel* maxWidth;
-
+    
     IBOutlet UISegmentedControl* minAlphaDelta;
     IBOutlet UISegmentedControl* maxAlphaDelta;
     IBOutlet UISegmentedControl* minWidthDelta;
     IBOutlet UISegmentedControl* maxWidthDelta;
-
-
+    
+    
     IBOutlet UIButton* blueButton;
     IBOutlet UIButton* redButton;
     IBOutlet UIButton* greenButton;
     IBOutlet UIButton* blackButton;
-
+    
     IBOutlet UIView* additionalOptionsView;
     IBOutlet UIButton* palmRejectionButton;
-
+    
     IBOutlet UIButton* settingsButton;
 }
 

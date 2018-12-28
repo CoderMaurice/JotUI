@@ -9,9 +9,14 @@
 #import "ViewController.h"
 #import "Pen.h"
 #import <JotUI/JotUI.h>
-
+#import <JotUI/SegmentSmoother.h>
+#import <JotUI/AbstractBezierPathElement-Protected.h>
 
 @interface ViewController () <JotViewStateProxyDelegate>
+
+@property (nonatomic, strong)  UIView *highlightView;
+
+@property (nonatomic, strong)  UIView *line;
 
 @end
 
@@ -22,7 +27,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-
+    
     pen = [[Pen alloc] init];
     marker = [[Marker alloc] init];
     eraser = [[Eraser alloc] init];
@@ -33,22 +38,52 @@
 }
 
 - (void)viewWillAppear:(BOOL)animated {
+    
+    //    CGSize screenSize = [UIScreen mainScreen].bounds.size;
+    
+    CGFloat topToolBarHeight = 76.f;
+    CGFloat jotViewH = 200.f;
     if (!jotView) {
-        jotView = [[JotView alloc] initWithFrame:self.view.bounds];
+        jotView = [[JotView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH, self.view.bounds.size.width, jotViewH)];
         jotView.delegate = self;
         [self.view insertSubview:jotView atIndex:0];
-
+        
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
         paperState.delegate = self;
         [paperState loadJotStateAsynchronously:NO withSize:jotView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:jotView.context andBufferManager:[JotBufferManager sharedInstance]];
         [jotView loadState:paperState];
-
+        
         [self changePenType:nil];
-
+        
         [self tappedColorButton:blackButton];
     }
+    
+    if (!_line) {
+        _line = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH - 1,  self.view.bounds.size.width, 1)];
+        _line.backgroundColor = [UIColor blackColor];
+        [self.view addSubview:_line];
+    }
+    
+    if (!disPlayView) {
+        disPlayView = [[JotView alloc] initWithFrame:CGRectMake(0, topToolBarHeight, self.view.bounds.size.width, _line.frame.origin.y - topToolBarHeight)];
+        [self.view insertSubview:disPlayView atIndex:0];
+        
+        JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
+        paperState.delegate = self;
+        [paperState loadJotStateAsynchronously:NO withSize:disPlayView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:disPlayView.context andBufferManager:[JotBufferManager sharedInstance]];
+        [disPlayView loadState:paperState];
+    }
+    
+    if (!_highlightView) {
+        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, topToolBarHeight, jotView.bounds.size.width / 4, jotView.bounds.size.height / 4)];
+        _highlightView.layer.borderColor = [UIColor blackColor].CGColor;
+        _highlightView.layer.borderWidth = 1.0;
+        [self.view addSubview:_highlightView];
+        
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
+        [_highlightView addGestureRecognizer:pan];
+    }
 }
-
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
@@ -90,7 +125,7 @@
         [self tappedColorButton:greenButton];
     if ([[self activePen].color isEqual:blueButton.backgroundColor])
         [self tappedColorButton:blueButton];
-
+    
     [self updatePenTickers];
 }
 
@@ -108,7 +143,7 @@
             button.selected = NO;
         }
     }
-
+    
     [self activePen].color = [sender backgroundColor];
 }
 
@@ -157,29 +192,29 @@
             [self activePen].maxSize += 5;
         }
     }
-
-
+    
+    
     if ([self activePen].minAlpha < 0)
         [self activePen].minAlpha = 0;
     if ([self activePen].minAlpha > 1)
         [self activePen].minAlpha = 1;
-
+    
     if ([self activePen].maxAlpha < 0)
         [self activePen].maxAlpha = 0;
     if ([self activePen].maxAlpha > 1)
         [self activePen].maxAlpha = 1;
-
+    
     if ([self activePen].minSize < 0)
         [self activePen].minSize = 0;
     if ([self activePen].maxSize < 0)
         [self activePen].maxSize = 0;
-
+    
     [self updatePenTickers];
 }
 
 
 - (IBAction)saveImage {
-    [jotView exportImageTo:[self jotViewStateInkPath] andThumbnailTo:[self jotViewStateThumbPath] andStateTo:[self jotViewStatePlistPath] withThumbnailScale:1.0 onComplete:^(UIImage* ink, UIImage* thumb, JotViewImmutableState* state) {
+    [jotView exportImageTo:[self jotViewStateInkPath] andThumbnailTo:[self jotViewStateThumbPath] andStateTo:[self jotViewStatePlistPath] withThumbnailScale:[[UIScreen mainScreen] scale] onComplete:^(UIImage* ink, UIImage* thumb, JotViewImmutableState* state) {
         UIImageWriteToSavedPhotosAlbum(thumb, nil, nil, nil);
         dispatch_async(dispatch_get_main_queue(), ^{
             UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Saved" message:@"The JotView's state has been saved to disk, and a full resolution image has been saved to the photo album." preferredStyle:UIAlertControllerStyleAlert];
@@ -194,10 +229,28 @@
     JotViewStateProxy* state = [[JotViewStateProxy alloc] initWithDelegate:self];
     [state loadJotStateAsynchronously:NO withSize:jotView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:jotView.context andBufferManager:[JotBufferManager sharedInstance]];
     [jotView loadState:state];
-
+    
     UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Loaded" message:@"The JotView's state been loaded from disk." preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"Ok" style:UIAlertActionStyleDefault handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)highlightViewPan:(UIPanGestureRecognizer *)recognizer
+{
+    if (recognizer.state == UIGestureRecognizerStateBegan) {
+    } else if (recognizer.state == UIGestureRecognizerStateChanged) {
+        CGPoint transP = [recognizer translationInView:self.highlightView];
+        //        NSLog(@"%@",NSStringFromCGPoint(transP));
+        
+        CGFloat newOrginX = MAX(MIN(disPlayView.bounds.size.width - _highlightView.bounds.size.width, _highlightView.frame.origin.x + transP.x), 0);
+        CGFloat newOrginY = MAX(MIN(CGRectGetMaxY(disPlayView.frame) - _highlightView.bounds.size.height, _highlightView.frame.origin.y + transP.y), disPlayView.frame.origin.y);
+        
+        _highlightView.frame = (CGRect){CGPointMake(newOrginX, newOrginY), _highlightView.frame.size};
+
+        [recognizer setTranslation:CGPointZero inView:self.highlightView];
+        
+    } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled) {
+    }
 }
 
 #pragma mark - Jot Stylus Button Callbacks
@@ -234,16 +287,19 @@
     [self updatePenTickers];
 }
 
-- (void)undo {
+- (IBAction)undo {
     [jotView undo];
+    [disPlayView undo];
 }
 
-- (void)redo {
+- (IBAction)redo {
     [jotView redo];
+    [disPlayView redo];
 }
 
 - (IBAction)clearScreen:(id)sender {
     [jotView clear:YES];
+    [disPlayView clear:YES];
 }
 
 
@@ -262,6 +318,13 @@
 }
 
 - (NSArray*)willAddElements:(NSArray*)elements toStroke:(JotStroke*)stroke fromPreviousElement:(AbstractBezierPathElement*)previousElement inJotView:(JotView*)jotView {
+    
+    // Project the stroke on the displayview by ratio
+    CGFloat scaleX = _highlightView.bounds.size.width / jotView.bounds.size.width;
+    CGFloat scaleY = _highlightView.bounds.size.height / jotView.bounds.size.height;
+    JotElementsRatio ratio = {CGSizeMake(- _highlightView.frame.origin.x, (disPlayView.bounds.size.height - (jotView.bounds.size.height * scaleY)) - (_highlightView.frame.origin.y - disPlayView.frame.origin.y)), CGPointMake(scaleX, scaleY)};
+    [disPlayView addElements:elements withTexture:[self activePen].texture ratio:ratio];
+    
     return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:jotView];
 }
 
@@ -279,6 +342,9 @@
 }
 
 - (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
+    
+     [disPlayView.state finishCurrentStroke];
+    
     [[self activePen] didEndStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
 }
 

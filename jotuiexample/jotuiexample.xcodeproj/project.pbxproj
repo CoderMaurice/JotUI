@@ -292,7 +292,7 @@
 				ORGANIZATIONNAME = "Milestone Made";
 				TargetAttributes = {
 					66F9214216734FF000B1F868 = {
-						DevelopmentTeam = MU27A4SCKC;
+						DevelopmentTeam = YUBXYHG629;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -475,6 +475,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_ARC = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				DEVELOPMENT_TEAM = YUBXYHG629;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "jotuiexample/jotuiexample-Prefix.pch";
@@ -484,7 +485,7 @@
 					"-fobjc-arc",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.milestonemade.jotuiexample;
+				PRODUCT_BUNDLE_IDENTIFIER = com.qihui.jotuiexample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				WRAPPER_EXTENSION = app;
@@ -496,6 +497,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_ARC = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				DEVELOPMENT_TEAM = YUBXYHG629;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "jotuiexample/jotuiexample-Prefix.pch";
@@ -505,7 +507,7 @@
 					"-fobjc-arc",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.milestonemade.jotuiexample;
+				PRODUCT_BUNDLE_IDENTIFIER = com.qihui.jotuiexample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				WRAPPER_EXTENSION = app;

@@ -22,7 +22,7 @@
 @property(nonatomic, assign) CGFloat width;
 @property(nonatomic, assign) CGFloat rotation;
 @property(nonatomic, assign) CGFloat extraLengthWithoutDot;
-
+@property(nonatomic, assign) CGFloat smoothness;
 @property(nonatomic, assign) CGFloat previousExtraLengthWithoutDot;
 @property(nonatomic, strong) UIColor* previousColor;
 @property(nonatomic, assign) CGFloat previousWidth;

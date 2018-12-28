@@ -24,6 +24,10 @@
 
 @class SegmentSmoother, UIPalmView;
 
+typedef struct elementsRatio {
+    CGSize  offset;
+    CGPoint scale;
+} JotElementsRatio;
 
 @interface JotView : UIView <JotStrokeDelegate>
 
@@ -86,6 +90,7 @@
 
 - (NSInteger)maxCurrentStrokeByteSize;
 - (void)addElements:(NSArray*)elements withTexture:(JotBrushTexture*)texture;
+- (void)addElements:(NSArray*)elements withTexture:(JotBrushTexture*)texture ratio:(JotElementsRatio)ratio;
 - (void)addUndoLevelAndFinishStroke;
 
 - (void)forceAddEmptyStroke;
@@ -96,7 +101,8 @@
 
 #pragma mark - debug
 - (void)drawLongLine;
-
+- (void)addStroke:(JotStroke *)stroke;
+- (void)test;
 #pragma mark - jot trash
 
 - (BOOL)hasLink;
