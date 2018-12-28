@@ -12,11 +12,12 @@
 #import <JotUI/SegmentSmoother.h>
 #import <JotUI/AbstractBezierPathElement-Protected.h>
 
-@interface ViewController () <JotViewStateProxyDelegate>
+@interface ViewController () <JotViewStateProxyDelegate, UIScrollViewDelegate>
 
 @property (nonatomic, strong)  UIView *highlightView;
-
 @property (nonatomic, strong)  UIView *line;
+@property (nonatomic, strong)  UIScrollView *jotViewContainer;
+@property (nonatomic, strong)  UIScrollView *displayViewContainer;
 
 @end
 
@@ -38,15 +39,33 @@
 }
 
 - (void)viewWillAppear:(BOOL)animated {
-    
-    //    CGSize screenSize = [UIScreen mainScreen].bounds.size;
-    
+
     CGFloat topToolBarHeight = 76.f;
     CGFloat jotViewH = 200.f;
-    if (!jotView) {
-        jotView = [[JotView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH, self.view.bounds.size.width, jotViewH)];
+    CGFloat highlightRatio = 2.f;
+    
+//    JotView *view = [[JotView alloc] initWithFrame:CGRectMake(0, 0, 3000, 1000)];
+//    view.frame = CGRectMake(0, 0, 3000, 1000);
+    if (!_line) {
+        _line = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH - 1,  self.view.mj_width, 1)];
+        _line.backgroundColor = [UIColor blackColor];
+        [self.view addSubview:_line];
+    }
+    
+    CGSize displaySize = CGSizeMake(self.view.mj_width, _line.mj_y - topToolBarHeight);
+    
+    if (!_jotViewContainer) {
+        _jotViewContainer = [[UIScrollView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH, self.view.mj_width, jotViewH)];
+        _jotViewContainer.showsHorizontalScrollIndicator = NO;
+        _jotViewContainer.showsVerticalScrollIndicator = NO;
+        _jotViewContainer.scrollEnabled = NO;
+        _jotViewContainer.delegate = self;
+        _jotViewContainer.bounces = NO;
+        [self.view addSubview:_jotViewContainer];
+        
+        jotView = [[JotView alloc] initWithFrame:(CGRect){CGPointZero,CGSizeMake(displaySize.width * highlightRatio, displaySize.height *highlightRatio)}];
         jotView.delegate = self;
-        [self.view insertSubview:jotView atIndex:0];
+        [_jotViewContainer addSubview:jotView];
         
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
         paperState.delegate = self;
@@ -56,29 +75,31 @@
         [self changePenType:nil];
         
         [self tappedColorButton:blackButton];
+        
+        _jotViewContainer.contentSize = jotView.mj_size;
+        _jotViewContainer.contentOffset = CGPointZero;
     }
     
-    if (!_line) {
-        _line = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH - 1,  self.view.bounds.size.width, 1)];
-        _line.backgroundColor = [UIColor blackColor];
-        [self.view addSubview:_line];
-    }
-    
-    if (!disPlayView) {
-        disPlayView = [[JotView alloc] initWithFrame:CGRectMake(0, topToolBarHeight, self.view.bounds.size.width, _line.frame.origin.y - topToolBarHeight)];
-        [self.view insertSubview:disPlayView atIndex:0];
+    if (!_displayViewContainer) {
+        _displayViewContainer = [[UIScrollView alloc] initWithFrame:(CGRect){CGPointMake(0, topToolBarHeight), displaySize}];
+        _displayViewContainer.scrollEnabled = NO;
+        [self.view addSubview:_displayViewContainer];
+        
+        displayView = [[JotView alloc] initWithFrame:_displayViewContainer.bounds];
+        [_displayViewContainer addSubview:displayView];
         
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
         paperState.delegate = self;
-        [paperState loadJotStateAsynchronously:NO withSize:disPlayView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:disPlayView.context andBufferManager:[JotBufferManager sharedInstance]];
-        [disPlayView loadState:paperState];
-    }
-    
-    if (!_highlightView) {
-        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, topToolBarHeight, jotView.bounds.size.width / 4, jotView.bounds.size.height / 4)];
+        [paperState loadJotStateAsynchronously:NO withSize:displayView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:displayView.context andBufferManager:[JotBufferManager sharedInstance]];
+        [displayView loadState:paperState];
+        
+         _displayViewContainer.contentSize = displayView.mj_size;
+        _displayViewContainer.contentOffset = CGPointZero;
+        
+        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _jotViewContainer.mj_width / highlightRatio, _jotViewContainer.mj_height / highlightRatio)];
         _highlightView.layer.borderColor = [UIColor blackColor].CGColor;
         _highlightView.layer.borderWidth = 1.0;
-        [self.view addSubview:_highlightView];
+        [_displayViewContainer addSubview:_highlightView];
         
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
         [_highlightView addGestureRecognizer:pan];
@@ -238,18 +259,21 @@
 - (void)highlightViewPan:(UIPanGestureRecognizer *)recognizer
 {
     if (recognizer.state == UIGestureRecognizerStateBegan) {
+
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
         CGPoint transP = [recognizer translationInView:self.highlightView];
-        //        NSLog(@"%@",NSStringFromCGPoint(transP));
         
-        CGFloat newOrginX = MAX(MIN(disPlayView.bounds.size.width - _highlightView.bounds.size.width, _highlightView.frame.origin.x + transP.x), 0);
-        CGFloat newOrginY = MAX(MIN(CGRectGetMaxY(disPlayView.frame) - _highlightView.bounds.size.height, _highlightView.frame.origin.y + transP.y), disPlayView.frame.origin.y);
+        CGFloat newOrginX = MAX(MIN(displayView.bounds.size.width - _highlightView.bounds.size.width, _highlightView.frame.origin.x + transP.x), 0);
+        CGFloat newOrginY = MAX(MIN(CGRectGetMaxY(displayView.frame) - _highlightView.bounds.size.height, _highlightView.frame.origin.y + transP.y), 0);
         
         _highlightView.frame = (CGRect){CGPointMake(newOrginX, newOrginY), _highlightView.frame.size};
 
+        _jotViewContainer.contentOffset = CGPointMake(_highlightView.mj_origin.x * 2, _highlightView.mj_origin.y * 2);
+        
         [recognizer setTranslation:CGPointZero inView:self.highlightView];
         
-    } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled) {
+    } else if (recognizer.state == UIGestureRecognizerStateEnded ||
+               recognizer.state == UIGestureRecognizerStateCancelled) {
     }
 }
 
@@ -288,18 +312,15 @@
 }
 
 - (IBAction)undo {
-    [jotView undo];
-    [disPlayView undo];
+    [displayView undo];
 }
 
 - (IBAction)redo {
-    [jotView redo];
-    [disPlayView redo];
+    [displayView redo];
 }
 
 - (IBAction)clearScreen:(id)sender {
     [jotView clear:YES];
-    [disPlayView clear:YES];
 }
 
 
@@ -319,11 +340,12 @@
 
 - (NSArray*)willAddElements:(NSArray*)elements toStroke:(JotStroke*)stroke fromPreviousElement:(AbstractBezierPathElement*)previousElement inJotView:(JotView*)jotView {
     
-    // Project the stroke on the displayview by ratio
-    CGFloat scaleX = _highlightView.bounds.size.width / jotView.bounds.size.width;
-    CGFloat scaleY = _highlightView.bounds.size.height / jotView.bounds.size.height;
-    JotElementsRatio ratio = {CGSizeMake(- _highlightView.frame.origin.x, (disPlayView.bounds.size.height - (jotView.bounds.size.height * scaleY)) - (_highlightView.frame.origin.y - disPlayView.frame.origin.y)), CGPointMake(scaleX, scaleY)};
-    [disPlayView addElements:elements withTexture:[self activePen].texture ratio:ratio];
+    // Project the stroke on the displayView by ratio
+    CGFloat scaleX = _highlightView.bounds.size.width / _jotViewContainer.bounds.size.width;
+    CGFloat scaleY = _highlightView.bounds.size.height / _jotViewContainer.bounds.size.height;
+//    JotElementsRatio ratio = {CGSizeMake(- _highlightView.frame.origin.x, (displayView.bounds.size.height - (jotView.bounds.size.height * scaleY)) - _highlightView.frame.origin.y), CGPointMake(scaleX, scaleY)};
+    JotElementsRatio ratio = {CGSizeZero, CGPointMake(scaleX, scaleY)};
+    [displayView addElements:elements withTexture:[self activePen].texture ratio:ratio];
     
     return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:jotView];
 }
@@ -343,10 +365,36 @@
 
 - (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
     
-     [disPlayView.state finishCurrentStroke];
-    
-    [[self activePen] didEndStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
+    [displayView.state finishCurrentStroke];
+//    [jotView undo];
+//    _jotViewContainer.image = [self displayViewSnapshotImage];
 }
+
+//- (UIImage *)displayViewSnapshotImage
+//{
+//    CGSize size = displayView.bounds.size;
+//    UIGraphicsBeginImageContextWithOptions(size, NO, [UIScreen mainScreen].scale);
+//
+//    CGRect rect = displayView.bounds;
+//    [displayView drawViewHierarchyInRect:rect afterScreenUpdates:YES];
+//    UIImage *snapshotImage = UIGraphicsGetImageFromCurrentImageContext();
+//    UIGraphicsEndImageContext();
+//    CGRect clipRect = CGRectMake(_highlightView.frame.origin.x, _highlightView.frame.origin.y - displayView.frame.origin.y, _highlightView.frame.size.width * [UIScreen mainScreen].scale, _highlightView.frame.size.height * [UIScreen mainScreen].scale);
+//    return [self imageFromImage:snapshotImage inRect:clipRect];
+//}
+//
+//- (UIImage *)imageFromImage:(UIImage *)image inRect:(CGRect)rect
+//{
+//    CGImageRef sourceImageRef = [image CGImage];
+//
+//    CGImageRef newImageRef = CGImageCreateWithImageInRect(sourceImageRef, rect);
+//
+//    UIImage *newImage = [UIImage imageWithCGImage:newImageRef];
+//
+//    CGImageRelease(newImageRef);
+//
+//    return newImage;
+//}
 
 - (void)willCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView {
     [[self activePen] willCancelStroke:stroke withCoalescedTouch:coalescedTouch fromTouch:touch inJotView:jotView];
@@ -401,5 +449,11 @@
 - (void)didUnloadState:(JotViewStateProxy*)state {
 }
 
+#pragma mark - UIScrollViewDelegate
+
+-(void)scrollViewDidScroll:(UIScrollView *)scrollView
+{
+//    NSLog(@"Scroll To %@",NSStringFromCGPoint(scrollView.contentOffset));
+}
 
 @end
