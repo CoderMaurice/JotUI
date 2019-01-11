@@ -13,7 +13,7 @@
     #import <Foundation/Foundation.h>
 
 #import "UIView+MJExtension.h"
-
+#import "Constants.h"
 
 // Macro
 #define SCREEN_WIDTH ([UIScreen mainScreen].bounds.size.width)
@@ -25,5 +25,8 @@
 #define CACHEFILEPATH NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES)[0]
 #define DOCFILEPATH NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0]
 #define LIBRARYFILEPATH NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)[0]
+
+#define kAbstractMethodException [NSException exceptionWithName:NSInternalInconsistencyException reason:[NSString stringWithFormat:@"You must override %@ in a subclass", NSStringFromSelector(_cmd)] userInfo:nil]
+
 
 #endif

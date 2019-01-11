@@ -40,7 +40,7 @@ static float clamp(min, max, value) {
 }
 
 - (id)init {
-    return [self initWithMinSize:3 andMaxSize:3.5 andMinAlpha:1 andMaxAlpha:1];
+    return [self initWithMinSize:3 andMaxSize:5 andMinAlpha:1 andMaxAlpha:1];
 }
 
 - (JotBrushTexture*)texture {

@@ -12,6 +12,8 @@
 #import <JotUI/SegmentSmoother.h>
 #import <JotUI/AbstractBezierPathElement-Protected.h>
 
+#import "EBWriteBackgrounds.h"
+
 typedef enum : NSUInteger {
     DrawingTypeDefault = 1,
     DrawingTypeWritingPad,
@@ -48,14 +50,7 @@ typedef enum : NSUInteger {
 static CGFloat topToolBarHeight = 76.f;
 
 - (void)viewWillAppear:(BOOL)animated {
-    
-//    CGFloat topToolBarHeight = 76.f;
-//    CGFloat jotViewH = 200.f;
-//    CGFloat highlightRatio = 1.f;
-    
-//    JotView *view = [[JotView alloc] initWithFrame:CGRectMake(0, 0, 3000, 1000)];
-//    view.frame = CGRectMake(0, 0, 3000, 1000);
-    
+
     _drawingType = DrawingTypeDefault;
     
     switch (_drawingType) {
@@ -157,7 +152,6 @@ static CGFloat topToolBarHeight = 76.f;
     // Dispose of any resources that can be recreated.
 }
 
-
 #pragma mark - Helpers
 
 - (Pen*)activePen {
@@ -179,9 +173,7 @@ static CGFloat topToolBarHeight = 76.f;
     maxWidth.text = [NSString stringWithFormat:@"%d", (int)[self activePen].maxSize];
 }
 
-
 #pragma mark - IBAction
-
 
 - (IBAction)changePenType:(id)sender {
     if ([[self activePen].color isEqual:blackButton.backgroundColor])
@@ -279,16 +271,24 @@ static CGFloat topToolBarHeight = 76.f;
     [self updatePenTickers];
 }
 
-
 - (IBAction)saveImage {
-    [writtingPad exportImageTo:[self jotViewStateInkPath] andThumbnailTo:[self jotViewStateThumbPath] andStateTo:[self jotViewStatePlistPath] withThumbnailScale:[[UIScreen mainScreen] scale] onComplete:^(UIImage* ink, UIImage* thumb, JotViewImmutableState* state) {
-        UIImageWriteToSavedPhotosAlbum(thumb, nil, nil, nil);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Saved" message:@"The JotView's state has been saved to disk, and a full resolution image has been saved to the photo album." preferredStyle:UIAlertControllerStyleAlert];
-            [alert addAction:[UIAlertAction actionWithTitle:@"Ok" style:UIAlertActionStyleDefault handler:nil]];
-            [self presentViewController:alert animated:YES completion:nil];
-        });
+    
+    [self exportVisiblePageToImage:^(NSURL *urlToImage) {
+        NSLog(@"exportVisiblePageToImage %@", urlToImage);
+
+        UIImage *img = [UIImage imageWithData:[NSData dataWithContentsOfURL:urlToImage]];
+
+        UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil);
     }];
+    
+//    [writtingPad exportImageTo:[self jotViewStateInkPath] andThumbnailTo:[self jotViewStateThumbPath] andStateTo:[self jotViewStatePlistPath] withThumbnailScale:[[UIScreen mainScreen] scale] onComplete:^(UIImage* ink, UIImage* thumb, JotViewImmutableState* state) {
+//        UIImageWriteToSavedPhotosAlbum(thumb, nil, nil, nil);
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//            UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Saved" message:@"The JotView's state has been saved to disk, and a full resolution image has been saved to the photo album." preferredStyle:UIAlertControllerStyleAlert];
+//            [alert addAction:[UIAlertAction actionWithTitle:@"Ok" style:UIAlertActionStyleDefault handler:nil]];
+//            [self presentViewController:alert animated:YES completion:nil];
+//        });
+//    }];
 }
 
 - (IBAction)loadImageFromLibary:(UIButton*)sender {
@@ -409,7 +409,8 @@ static CGFloat topToolBarHeight = 76.f;
     [[self activePen] willMoveStrokeWithCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
-- (void)willEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch shortStrokeEnding:(BOOL)shortStrokeEnding inJotView:(JotView*)writtingPad {
+- (void)willEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch shortStrokeEnding:(BOOL)shortStrokeEnding inJotView:(JotView*)writtingPad
+{
     // noop
     
 }
@@ -482,5 +483,213 @@ static CGFloat topToolBarHeight = 76.f;
 {
 //    NSLog(@"Scroll To %@",NSStringFromCGPoint(scrollView.contentOffset));
 }
+
+
+#pragma mark - Export to PDF
+
+- (void)exportVisiblePageToPDF:(void (^)(NSURL* urlToPDF))completionBlock {
+    NSString* tmpPagePath = [[NSTemporaryDirectory() stringByAppendingString:[[NSUUID UUID] UUIDString]] stringByAppendingPathExtension:@"pdf"];
+    
+    __block CGContextRef context;
+    __block CFDataRef boxData;
+    
+    [self exportVisiblePage:completionBlock
+       startingContextBlock:^CGContextRef(CGRect finalExportBounds, CGFloat scale, CGFloat defaultRotation) {
+        CGRect exportedPageSize = CGRectFromSize(finalExportBounds.size);
+        context = CGPDFContextCreateWithURL((__bridge CFURLRef)([NSURL fileURLWithPath:tmpPagePath]), &exportedPageSize, NULL);
+        UIGraphicsPushContext(context);
+        
+        boxData = CFDataCreate(NULL, (const UInt8*)&exportedPageSize, sizeof(CGRect));
+        
+        CGPDFContextBeginPage(context, (CFDictionaryRef) @{ @"Rotate": @(defaultRotation),
+                                                            (NSString*)kCGPDFContextMediaBox: (__bridge NSData*)boxData });
+        
+        CGContextScaleCTM(context, 1, -1);
+        CGContextTranslateCTM(context, 0, -finalExportBounds.size.height);
+        
+        return context;
+    } endingContextBlock:^NSURL *(){
+        CGPDFContextEndPage(context);
+        CGPDFContextClose(context);
+        UIGraphicsPopContext();
+        CFRelease(context);
+        CFRelease(boxData);
+        
+        return [NSURL fileURLWithPath:tmpPagePath];
+    }];
+}
+
+- (void)exportVisiblePageToImage:(void (^)(NSURL* urlToImage))completionBlock {
+    [self exportVisiblePage:completionBlock
+       startingContextBlock:^CGContextRef(CGRect finalExportBounds, CGFloat scale, CGFloat defaultRotation) {
+           
+           UIGraphicsBeginImageContextWithOptions(finalExportBounds.size, NO, scale);
+           CGContextRef context = UIGraphicsGetCurrentContext();
+           
+           return context;
+       } endingContextBlock:^NSURL *{
+           NSString* tmpPagePath = [[NSTemporaryDirectory() stringByAppendingString:[[NSUUID UUID] UUIDString]] stringByAppendingPathExtension:@"png"];
+           
+           UIImage* outputImage = UIGraphicsGetImageFromCurrentImageContext();
+           [UIImagePNGRepresentation(outputImage) writeToFile:tmpPagePath atomically:YES];
+           
+           UIGraphicsEndImageContext();
+           
+           return [NSURL fileURLWithPath:tmpPagePath];
+       }];
+}
+
+// NOTE: this method will export the image in the same
+// orientation as its original background. if there is
+// no background, then it will be exported portrait
+- (void)exportVisiblePage:(void (^)(NSURL* urlToImage))completionBlock
+     startingContextBlock:(CGContextRef (^)(CGRect finalExportBounds, CGFloat scale, CGFloat defaultRotation))startContextBlock
+       endingContextBlock:(NSURL* (^)())endContextBlock{
+    
+    UIImage* backgroundImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"test_bg" ofType:@"jpg"]];
+    
+    // default the page size to the screen dimensions in PDF ppi.
+    CGSize screenSize = [[[UIScreen mainScreen] fixedCoordinateSpace] bounds].size;
+    __block CGRect finalExportBounds = CGRectFromSize(screenSize);
+    CGSize backgroundSize = CGSizeZero;
+    CGFloat defaultRotation = 0;
+    CGFloat scale = [[UIScreen mainScreen] scale];
+    
+    // determine how many times we need to rotate the page content
+    // for it to be in the target rotation
+    // negative == rotate right
+    // positive == rotate left
+    NSInteger fullRotation = 0;
+
+    
+    // now we know our target rotation, so let's export:
+    
+    if ([[displayView state] isStateLoaded]) {
+        
+//        MMImmutableScrapsOnPaperState* immutableScrapState = [scrapsOnPaperState immutableStateForPath:nil];
+        
+        
+        [displayView exportToImageOnComplete:^(UIImage* image) {
+       
+            
+            ////////////////////////////////////////////////////////
+            //
+            // Rotation Step #1
+            // calculate the proper export bounds for the page
+            // given the input preference for landscape left, landscape
+            // right, or portrait
+            //
+            CGRect preRotationExportBounds = finalExportBounds;
+            CGRect postRotationExportBounds = finalExportBounds;
+//            while(targetRotation != 0){
+//                postRotationExportBounds = CGRectSwap(postRotationExportBounds);
+//
+//                // move 1 closer to 0
+//                targetRotation -= SIGN(fullRotation);
+//            }
+            //
+            ////////////////////////////////////////////////////////
+            
+            CGContextRef context = startContextBlock(postRotationExportBounds, scale, defaultRotation);
+            CGContextSaveThenRestoreForBlock(context, ^{
+                // flip
+                CGContextSetInterpolationQuality(context, kCGInterpolationHigh);
+                
+                ////////////////////////////////////////////////////////
+                //
+                // Rotation Step #2
+                // Handle rotating the canvas to adjust for user specified
+                // landscape left, landscape right, or portrait rotation
+                //
+                NSInteger targetRotation = fullRotation;
+                
+                CGContextTranslateCTM(context, postRotationExportBounds.size.width / 2, postRotationExportBounds.size.height / 2);
+                
+                while(targetRotation != 0){
+                    CGFloat theta = 90.0 * M_PI / 180.0 * -1 * SIGN(fullRotation);
+                    CGContextRotateCTM(context, theta);
+                    
+                    // move 1 closer to 0
+                    targetRotation -= SIGN(fullRotation);
+                }
+                
+                CGContextTranslateCTM(context, -preRotationExportBounds.size.width / 2, -preRotationExportBounds.size.height / 2);
+                //
+                ////////////////////////////////////////////////////////
+                
+                // guarantee at least a white background
+                [[UIColor whiteColor] setFill];
+                [[UIBezierPath bezierPathWithRect:finalExportBounds] fill];
+
+                
+                
+//            if (backgroundImage) {
+//                    // image background
+//                    CGContextSaveThenRestoreForBlock(context, ^{
+//                        CGRect rectForImage = CGRectMake(0, 0, finalExportBounds.size.width, finalExportBounds.size.height);
+//                        [backgroundImage drawInRect:rectForImage];
+//                    });
+//                } else if(_ruledOrGridBackgroundView){
+//                    [_ruledOrGridBackgroundView drawInContext:context forSize:finalExportBounds.size];
+//                }
+                
+                MMTodoListTemplateView *todoBG = [[MMTodoListTemplateView alloc] initWithFrame:finalExportBounds andOriginalSize:finalExportBounds.size andProperties:@{}];
+                [todoBG drawInContext:context forSize:finalExportBounds.size];
+                
+//                if(backgroundSize.width > backgroundSize.height){
+//                    // if the background is landscape, then we need to rotate our
+//                    // canvas so that the landscape PDF is drawn on our
+//                    // vertical canvas properly.
+//                    CGFloat theta = 90.0 * M_PI / 180.0;
+//                    if([self usesCorrectBackgroundRotation]){
+//                        theta = -theta;
+//                    }
+//
+//                    CGContextTranslateCTM(context, finalExportBounds.size.width / 2, finalExportBounds.size.height / 2);
+//                    CGContextRotateCTM(context, theta);
+//
+//                    finalExportBounds = CGRectSwap(finalExportBounds);
+//
+//                    CGContextTranslateCTM(context, -finalExportBounds.size.width / 2, -finalExportBounds.size.height / 2);
+//                }
+                
+                CGContextSaveThenRestoreForBlock(context, ^{
+                    // flip context
+                    CGContextTranslateCTM(context, 0, finalExportBounds.size.height);
+                    CGContextScaleCTM(context, 1, -1);
+                    
+                    // adjust to origin
+                    CGContextTranslateCTM(context, -finalExportBounds.origin.x, -finalExportBounds.origin.y);
+                    
+                    // Draw Ink
+                    CGContextDrawImage(context, CGRectFromSize(screenSize), [image CGImage]);
+                });
+                
+                CGContextSaveThenRestoreForBlock(context, ^{
+                    // Scraps
+                    // adjust so that (0,0) is the origin of the content rect in the PDF page,
+                    // since the PDF may be much taller/wider than our screen
+                    CGContextTranslateCTM(context, -finalExportBounds.origin.x, -finalExportBounds.origin.y);
+                });
+            });
+            
+            NSURL* fullyRenderedPDFURL = endContextBlock();
+            
+//            [pdf closePDF];
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (completionBlock)
+                    completionBlock(fullyRenderedPDFURL);
+            });
+            
+        } withScale:[UIScreen mainScreen].scale];
+        return;
+    }
+    
+    if (completionBlock)
+        completionBlock(nil);
+}
+
+
 
 @end
