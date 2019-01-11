@@ -102,4 +102,10 @@
  */
 - (void)didCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)jotView;
 
+
+- (void)jotView:(JotView*)jotView touchesBegan:(NSSet*)touches withEvent:(UIEvent*)event;
+- (void)jotView:(JotView*)jotView touchesMoved:(NSSet*)touches withEvent:(UIEvent*)event;
+- (void)jotView:(JotView*)jotView touchesEnd:(NSSet*)touches withEvent:(UIEvent*)event;
+- (void)jotView:(JotView*)jotView touchesCancelled:(NSSet*)touches withEvent:(UIEvent*)event;
+
 @end

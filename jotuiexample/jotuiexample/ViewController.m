@@ -42,7 +42,7 @@
 
     CGFloat topToolBarHeight = 76.f;
     CGFloat jotViewH = 200.f;
-    CGFloat highlightRatio = 2.f;
+    CGFloat highlightRatio = 1.f;
     
 //    JotView *view = [[JotView alloc] initWithFrame:CGRectMake(0, 0, 3000, 1000)];
 //    view.frame = CGRectMake(0, 0, 3000, 1000);
@@ -86,6 +86,8 @@
         [self.view addSubview:_displayViewContainer];
         
         displayView = [[JotView alloc] initWithFrame:_displayViewContainer.bounds];
+        displayView.delegate = self;
+        displayView.writtingPad = writtingPad;
         [_displayViewContainer addSubview:displayView];
         
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
@@ -96,13 +98,13 @@
          _displayViewContainer.contentSize = displayView.mj_size;
         _displayViewContainer.contentOffset = CGPointZero;
         
-        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _jotViewContainer.mj_width / highlightRatio, _jotViewContainer.mj_height / highlightRatio)];
-        _highlightView.layer.borderColor = [UIColor blackColor].CGColor;
-        _highlightView.layer.borderWidth = 1.0;
-        [_displayViewContainer addSubview:_highlightView];
-        
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
-        [_highlightView addGestureRecognizer:pan];
+//        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _jotViewContainer.mj_width / highlightRatio, _jotViewContainer.mj_height / highlightRatio)];
+//        _highlightView.layer.borderColor = [UIColor blackColor].CGColor;
+//        _highlightView.layer.borderWidth = 1.0;
+//        [_displayViewContainer addSubview:_highlightView];
+//
+//        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
+//        [_highlightView addGestureRecognizer:pan];
     }
     
     [self.view bringSubviewToFront:additionalOptionsView];
@@ -345,12 +347,12 @@
 
 - (NSArray*)willAddElements:(NSArray*)elements toStroke:(JotStroke*)stroke fromPreviousElement:(AbstractBezierPathElement*)previousElement inJotView:(JotView*)writtingPad {
     
-    // Project the stroke on the displayView by ratio
+//    // Project the stroke on the displayView by ratio
     CGFloat scaleX = _highlightView.bounds.size.width / _jotViewContainer.bounds.size.width;
     CGFloat scaleY = _highlightView.bounds.size.height / _jotViewContainer.bounds.size.height;
-//    JotElementsRatio ratio = {CGSizeMake(- _highlightView.frame.origin.x, (displayView.bounds.size.height - (writtingPad.bounds.size.height * scaleY)) - _highlightView.frame.origin.y), CGPointMake(scaleX, scaleY)};
     JotElementsRatio ratio = {CGSizeZero, CGPointMake(scaleX, scaleY)};
-    [displayView addElements:elements withTexture:[self activePen].texture ratio:ratio];
+    
+    [displayView addElements:elements withTexture:[self activePen].textureForStroke];
     
     return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:writtingPad];
 }
@@ -371,35 +373,7 @@
 - (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     
     [displayView.state finishCurrentStroke];
-//    [writtingPad undo];
-//    _jotViewContainer.image = [self displayViewSnapshotImage];
 }
-
-//- (UIImage *)displayViewSnapshotImage
-//{
-//    CGSize size = displayView.bounds.size;
-//    UIGraphicsBeginImageContextWithOptions(size, NO, [UIScreen mainScreen].scale);
-//
-//    CGRect rect = displayView.bounds;
-//    [displayView drawViewHierarchyInRect:rect afterScreenUpdates:YES];
-//    UIImage *snapshotImage = UIGraphicsGetImageFromCurrentImageContext();
-//    UIGraphicsEndImageContext();
-//    CGRect clipRect = CGRectMake(_highlightView.frame.origin.x, _highlightView.frame.origin.y - displayView.frame.origin.y, _highlightView.frame.size.width * [UIScreen mainScreen].scale, _highlightView.frame.size.height * [UIScreen mainScreen].scale);
-//    return [self imageFromImage:snapshotImage inRect:clipRect];
-//}
-//
-//- (UIImage *)imageFromImage:(UIImage *)image inRect:(CGRect)rect
-//{
-//    CGImageRef sourceImageRef = [image CGImage];
-//
-//    CGImageRef newImageRef = CGImageCreateWithImageInRect(sourceImageRef, rect);
-//
-//    UIImage *newImage = [UIImage imageWithCGImage:newImageRef];
-//
-//    CGImageRelease(newImageRef);
-//
-//    return newImage;
-//}
 
 - (void)willCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     [[self activePen] willCancelStroke:stroke withCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
@@ -422,6 +396,47 @@
 - (CGFloat)smoothnessForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     return [[self activePen] smoothnessForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
+
+- (void)jotView:(JotView *)jotView touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
+{
+//    if (jotView == writtingPad) {
+//        for (UITouch *touch in touches) {
+//            NSLog(@"%ld",touch.hash);
+//        }
+//        NSLog(@"---------");
+//        NSMutableSet *touch1es = [NSMutableSet set];
+//        for (UITouch *touch in touches) {
+//            UITouch *newTouch = [touch copy];
+//            [touch1es addObject:newTouch];
+//            NSLog(@"%ld",newTouch.hash);
+//        }
+//        NSLog(@"---------");
+//        [displayView touchesBegan:touch1es withEvent:event];
+//    }
+}
+//
+//- (void)jotView:(JotView *)jotView touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
+//{
+//    if (jotView == writtingPad) {
+//        [displayView touchesMoved:touches withEvent:event];
+//    }
+//}
+//
+//- (void)jotView:(JotView *)jotView touchesEnd:(NSSet *)touches withEvent:(UIEvent *)event
+//{
+//    if (jotView == writtingPad) {
+//        [displayView touchesEnded:touches withEvent:event];
+//    }
+//}
+//
+//- (void)jotView:(JotView *)jotView touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event
+//{
+//    if (jotView == writtingPad) {
+//        [displayView touchesCancelled:touches withEvent:event];
+//    }
+//}
+
+
 
 #pragma mark - UIPopoverControllerDelegate
 

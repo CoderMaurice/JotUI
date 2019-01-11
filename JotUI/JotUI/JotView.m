@@ -39,7 +39,7 @@
 #define kJotValidateUndoTimer .06
 
 
-dispatch_queue_t importExportImageQueue;
+dispatch_queue_t importExportImageQueue;  // 导出图片线程
 dispatch_queue_t importExportStateQueue;
 
 
@@ -51,38 +51,48 @@ dispatch_queue_t importExportStateQueue;
 @private
     JotGLLayerBackedFrameBuffer* viewFramebuffer;
     
-    //
-    // these 4 properties help with our performance when writing
-    // large strokes to the backing texture. the timer will continually
-    // try to validate our undo state. if a stroke needs to be pushed
-    // off the undo stack, then it's added to the strokesBeingWrittenToBackingTexture
-    // array, and then progressively written to the backing texture over
-    // numerous calls by the Timer.
-    //
-    // this prevents an entire stroke from being written to the texture
-    // in just 1 go, and spreads that work out over time.
-    //
-    // if our export method gets called while we're writing to the texture,
-    // then we add that to a queue and will re-call that export method
-    // after all the strokes have been written to disk
+    /*
+     these 4 properties help with our performance when writing
+     large strokes to the backing texture. the timer will continually
+     try to validate our undo state. if a stroke needs to be pushed
+     off the undo stack, then it's added to the strokesBeingWrittenToBackingTexture
+     array, and then progressively written to the backing texture over
+     numerous calls by the Timer.
+    
+     this prevents an entire stroke from being written to the texture
+     in just 1 go, and spreads that work out over time.
+    
+     if our export method gets called while we're writing to the texture,
+     then we add that to a queue and will re-call that export method
+     after all the strokes have been written to disk
+    
+     在将较大的笔划写入支持纹理时，这4个属性有助于我们的性能。 计时器将不断尝试验证我们的撤销状态。
+     如果一个笔划需要从撤销堆栈中推出，那么它会被添加到strokesBeingWrittenToBackingTexture数组中，然后通过Timer的大量调用逐步写入支持纹理。
+     这可以防止整个笔划仅在1次内写入纹理，并随着时间的推移传播。
+     如果我们在写入纹理时调用了我们的导出方法，那么我们将它添加到队列中，并在所有笔划写入磁盘后重新调用该导出方法
+    **/
     MMWeakTimer* validateUndoStateTimer;
     AbstractBezierPathElement* prevElementForTextureWriting;
     NSMutableArray* exportLaterInvocations;
     NSUInteger isCurrentlyExporting;
     
     // a handle to the image used as the current brush texture
+    // 用作当前画笔纹理的图像的句柄
     JotViewStateProxy* state;
     
     CGSize initialFrameSize;
     
     // the maximum stroke size in bytes before a new stroke
     // is created
+    // 创建新笔划之前的最大笔划大小（以字节为单位）
     NSInteger maxStrokeSize;
     
     NSLock* inkTextureLock;
     NSLock* imageTextureLock;
     
     CADisplayLink* displayLink;
+    
+    JotStrokeManager* strokeManager;
 }
 
 @end
@@ -95,6 +105,13 @@ dispatch_queue_t importExportStateQueue;
 @synthesize maxStrokeSize;
 @synthesize state;
 
+- (void)setWrittingPad:(JotView *)writtingPad
+{
+    _writtingPad = writtingPad;
+    
+    self.userInteractionEnabled = NO;
+}
+
 #pragma mark - Initialization
 
 static JotGLContext* mainThreadContext;
@@ -106,6 +123,8 @@ static JotGLContext* mainThreadContext;
 /**
  * Implement this to override the default layer class (which is [CALayer class]).
  * We do this so that our view will be backed by a layer that is capable of OpenGL ES rendering.
+ * 实现此操作以覆盖默认图层类（即[CALayer类]）。
+ * 我们这样做是为了让我们的视图得到一个能够进行OpenGL ES渲染的图层的支持。
  */
 + (Class)layerClass {
     return [CAEAGLLayer class];
@@ -136,11 +155,14 @@ static JotGLContext* mainThreadContext;
 - (id)finishInit {
     CheckMainThread;
     //    [JotView plusOne];
+    strokeManager = [[JotStrokeManager alloc] init];
+    
     inkTextureLock = [[NSLock alloc] init];
     imageTextureLock = [[NSLock alloc] init];
     // strokes have a max of .5Mb each
     self.maxStrokeSize = 512 * 1024;
     
+    // 提高FPS
     displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkPresentRenderBuffer:)];
     [self speedUpFPS];
     [displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
@@ -160,7 +182,7 @@ static JotGLContext* mainThreadContext;
     state = nil;
     
     // allow more than 1 finger/stylus to draw at a time
-    self.multipleTouchEnabled = YES;
+    self.multipleTouchEnabled = NO;
     
     //
     // the remainder is OpenGL initialization
@@ -242,6 +264,7 @@ static const void* const kImportExportStateQueueIdentifier = &kImportExportState
  * this will create the framebuffer and related
  * render and depth buffers that we'll use for
  * drawing
+ * 这将创建帧缓冲区以及我们将用于绘制的相关渲染和深度缓冲区
  */
 - (BOOL)createFramebuffer {
     CheckMainThread;
@@ -256,6 +279,7 @@ static const void* const kImportExportStateQueueIdentifier = &kImportExportState
 
 /**
  * Clean up any buffers we have allocated.
+ * 清理我们分配的任何缓冲区
  */
 - (void)destroyFramebuffer {
     JotGLContext* destroyContext = context;
@@ -287,6 +311,13 @@ static const void* const kImportExportStateQueueIdentifier = &kImportExportState
  * This method will also reset the undo state of the view.
  *
  * This method must be called at least one time after initialization
+    此方法将输入图像加载到可绘制视图中
+    并将适当拉伸以填充该区域。 为了获得最佳效果
+    使用与视图框架大小相同的图像。
+
+    此方法还将重置视图的撤消状态。
+ 
+    初始化后必须至少调用此方法一次
  */
 - (void)loadState:(JotViewStateProxy*)newState {
     CheckMainThread;
@@ -296,15 +327,16 @@ static const void* const kImportExportStateQueueIdentifier = &kImportExportState
         if ([state hasEditsToSave]) {
             // be explicit about not letting us change the state of
             // the drawable view if there are saves pending.
+            // 如果有待处理的保存，则不允许我们更改可绘制视图的状态。
             @throw [NSException exceptionWithName:@"JotViewException" reason:@"Changing JotView state with saves pending" userInfo:nil];
         }
         // at this point, we know that we've saved 100% of our
         // state to disk, but for some reason still have saves
         // pending.
-        //
+        // 在这一点上，我们知道我们已经将100％的状态保存到磁盘，但由于某种原因仍然保存待定。
         // empty out this array - otherwise we'll try to save our
         // new state during this old invocation.
-        //
+        // 清空这个数组 - 否则我们将在这个旧的调用期间尝试保存我们的新状态。
         // https://github.com/adamwulf/loose-leaf/issues/533
         [exportLaterInvocations removeAllObjects];
     }
@@ -324,7 +356,7 @@ static const void* const kImportExportStateQueueIdentifier = &kImportExportState
  * i need to send out nil for the ink and thumbnail
  * if i can determine that either/both do not have any
  * user drawn content on them
- *
+ * 如果我可以确定其中一个/两个都没有任何用户绘制的内容，我需要发送墨水和缩略图的nil
  * https://github.com/adamwulf/loose-leaf/issues/226
  */
 - (void)exportImageTo:(NSString*)inkPath
@@ -960,6 +992,9 @@ static const void* const kImportExportStateQueueIdentifier = &kImportExportState
  * this can be used if a user cancells a stroke or undos
  * a stroke. it will clear the screen and re-draw all
  * strokes except for that undone/cancelled stroke
+ * 此方法将重新渲染我们在可撤消缓冲区中的所有笔划。
+ * 如果用户取消笔划或撤消笔划，则可以使用此选项。
+ * 它将清除屏幕并重新绘制除了撤消/取消的笔划之外的所有笔划
  */
 - (void)renderAllStrokesToContext:(JotGLContext*)renderContext inFramebuffer:(AbstractJotGLFrameBuffer*)theFramebuffer andPresentBuffer:(BOOL)shouldPresent inRect:(CGRect)scissorRect {
     [self renderAllStrokesToContext:renderContext inFramebuffer:theFramebuffer andPresentBuffer:shouldPresent inRect:scissorRect withBlock:nil];
@@ -1129,6 +1164,10 @@ CGFloat JotBNRTimeBlock(void (^block)(void)) {
  *
  * it will smooth a rounded line from the previous segment, and will
  * also smooth the width and color transition
+ 
+   根据用户触摸的位置在屏幕上绘制一条线
+   这会将终点添加到当前笔划，然后将新笔划段渲染到gl上下文
+   它将平滑前一段的圆形线，并且还会平滑宽度和颜色过渡
  */
 - (BOOL)addLineToAndRenderStroke:(JotStroke*)currentStroke toPoint:(CGPoint)end toWidth:(CGFloat)width toColor:(UIColor*)color andSmoothness:(CGFloat)smoothFactor withStepWidth:(CGFloat)stepWidth {
     CheckMainThread;
@@ -1142,9 +1181,10 @@ CGFloat JotBNRTimeBlock(void (^block)(void)) {
     // fetch the current and previous elements
     // of the stroke. these will help us
     // step over their length for drawing
+    // 获取笔划的当前和前一个元素。 这些将有助于我们超越他们的绘画长度
     AbstractBezierPathElement* previousElement = [currentStroke.segments lastObject];
     
-    // Convert touch point from UIView referential to OpenGL one (upside-down flip)
+    // 将触摸点从UIView转换为OpenGL（颠倒翻转）
     end.y = self.bounds.size.height - end.y;
     
     
@@ -1172,6 +1212,7 @@ CGFloat JotBNRTimeBlock(void (^block)(void)) {
         
         // prepend the previous element, so that each of our new elements has a previous element to
         // render with
+        // 前置前一个元素，以便我们的每个新元素都有一个要渲染的前一个元素
         elements = [[NSArray arrayWithObject:(previousElement ? previousElement : [NSNull null])] arrayByAddingObjectsFromArray:elements];
         [currentStroke.texture bind];
         for (int i = 1; i < [elements count]; i++) {
@@ -1443,19 +1484,27 @@ static int undoCounter;
     
     for (UITouch* touch in touches) {
         @autoreleasepool {
-            if ([self.delegate willBeginStrokeWithCoalescedTouch:touch fromTouch:touch inJotView:self]) {
-                NSAssert([self.delegate textureForStroke] != nil, @"somehow got nil texture");
+            if ([self.delegate willBeginStrokeWithCoalescedTouch:touch fromTouch:touch inJotView:self]) { // 开始落笔
+                NSAssert([self.delegate textureForStroke] != nil, @"somehow got nil texture");  // 有无笔画
                 
-                JotStroke* newStroke = [[JotStrokeManager sharedInstance] makeStrokeForTouchHash:touch andTexture:[self.delegate textureForStroke] andBufferManager:state.bufferManager];
+                
+                JotStroke* newStroke = [strokeManager makeStrokeForTouchHash:touch andTexture:[self.delegate textureForStroke] andBufferManager:state.bufferManager];
                 newStroke.delegate = self;
-                state.currentStroke = newStroke;
+                state.currentStroke = newStroke; // 设置为当前笔画
                 
                 // find the stroke that we're modifying, and then add an element and render it
-                CGPoint preciseLocInView = [touch locationInView:self];
+                JotView *jotView = _writtingPad ?: self;
+                // 从touch中取出笔画的位置
+                CGPoint preciseLocInView = [touch locationInView:jotView];
                 if ([touch respondsToSelector:@selector(preciseLocationInView:)]) {
-                    preciseLocInView = [touch preciseLocationInView:self];
+                    preciseLocInView = [touch preciseLocationInView:jotView];
                 }
-                //                preciseLocInView = CGPointMake(preciseLocInView.x / 2, preciseLocInView.y / 2);
+                if (_writtingPad) {
+                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
+                }else {
+                    DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
+                }
+                // 添加笔画在界面上
                 [self addLineToAndRenderStroke:newStroke
                                        toPoint:preciseLocInView
                                        toWidth:[self.delegate widthForCoalescedTouch:touch fromTouch:touch inJotView:self]
@@ -1466,6 +1515,12 @@ static int undoCounter;
         }
     }
     [JotGLContext validateEmptyContextStack];
+    
+    if (_writtingPad == nil) {
+        if ([self.delegate respondsToSelector:@selector(jotView:touchesBegan:withEvent:)]) {
+            [self.delegate jotView:self touchesBegan:touches withEvent:event];
+        }
+    }
 }
 
 /**
@@ -1474,7 +1529,6 @@ static int undoCounter;
 static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     return hypotf(a.x - b.x, a.y - b.y);
 }
-
 
 - (void)touchesMoved:(NSSet*)touches withEvent:(UIEvent*)event {
     if (!state)
@@ -1487,19 +1541,26 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         }
         
         
-        JotStroke* currentStroke = [[JotStrokeManager sharedInstance] getStrokeForTouchHash:touch];
+        JotStroke* currentStroke = [strokeManager getStrokeForTouchHash:touch];
         [currentStroke lock];
         
         for (UITouch* coalescedTouch in coalesced) {
             @autoreleasepool {
                 // check for other brands of stylus,
                 // or process non-Jot touches
-                //
+                
                 // for this example, we'll simply draw every touch if
                 // the jot sdk is not enabled
-                CGPoint preciseLocInView = [coalescedTouch locationInView:self];
+                
+                JotView *jotView = _writtingPad ?: self;
+                CGPoint preciseLocInView = [coalescedTouch locationInView:jotView];
                 if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
-                    preciseLocInView = [coalescedTouch preciseLocationInView:self];
+                    preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
+                }
+                if (_writtingPad) {
+                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
+                }else {
+                    DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
                 }
                 // Convert touch point from UIView referential to OpenGL one (upside-down flip)
                 CGPoint glPreciseLocInView = preciseLocInView;
@@ -1514,11 +1575,12 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                     CGPoint end = glPreciseLocInView;
                     CGPoint diff = CGPointMake(end.x - start.x, end.y - start.y);
                     CGFloat rot = atan2(diff.y, diff.x);
-                    //                     CGFloat rot = M_PI_4;
+                    // CGFloat rot = M_PI_4;
                     
                     if ([[currentStroke segments] count] == 1 && distanceBetween2(start, end) < 7) {
                         // if the rotation is off by at least 10 degrees, then updated the rotation on the stroke
                         // otherwise let the previous rotation stand
+                        // 如果旋转偏离至少10度，则更新笔划上的旋转，否则让前一旋转停止
                         [[currentStroke segments] enumerateObjectsUsingBlock:^(AbstractBezierPathElement* _Nonnull obj, NSUInteger idx, BOOL* _Nonnull stop) {
                             obj.rotation = rot;
                         }];
@@ -1527,12 +1589,14 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 }
                 
                 if (currentStroke && !shouldSkipSegment) {
-                    CGPoint preciseLocInView = [coalescedTouch locationInView:self];
+                         JotView *jotView = _writtingPad ?: self;
+                    CGPoint preciseLocInView = [coalescedTouch locationInView:jotView];
                     if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
-                        preciseLocInView = [coalescedTouch preciseLocationInView:self];
+                        preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
                     }
                     
                     // find the stroke that we're modifying, and then add an element and render it
+                    // 找到我们正在修改的笔划，然后添加一个元素并渲染它
                     [self addLineToAndRenderStroke:currentStroke
                                            toPoint:preciseLocInView
                                            toWidth:[self.delegate widthForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:self]
@@ -1546,6 +1610,12 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         [currentStroke unlock];
     }
     [JotGLContext validateEmptyContextStack];
+    
+    if (_writtingPad == nil) {
+        if ([self.delegate respondsToSelector:@selector(jotView:touchesMoved:withEvent:)]) {
+            [self.delegate jotView:self touchesMoved:touches withEvent:event];
+        }
+    }
 }
 
 - (void)touchesEnded:(NSSet*)touches withEvent:(UIEvent*)event {
@@ -1557,7 +1627,7 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         if (![coalesced count]) {
             coalesced = @[touch];
         }
-        JotStroke* currentStroke = [[JotStrokeManager sharedInstance] getStrokeForTouchHash:touch];
+        JotStroke* currentStroke = [strokeManager getStrokeForTouchHash:touch];
         BOOL shortStrokeEnding = [currentStroke.segments count] <= 1;
         
         [self.delegate willEndStrokeWithCoalescedTouch:touch fromTouch:touch shortStrokeEnding:shortStrokeEnding inJotView:self];
@@ -1568,12 +1638,16 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 // now line to the end of the stroke
                 for (UITouch* coalescedTouch in coalesced) {
                     // now line to the end of the stroke
-                    
-                    CGPoint preciseLocInView = [coalescedTouch locationInView:self];
+                    JotView *jotView = _writtingPad ?: self;
+                    CGPoint preciseLocInView = [coalescedTouch locationInView:jotView];
                     if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
-                        preciseLocInView = [coalescedTouch preciseLocationInView:self];
+                        preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
                     }
-                    
+                    if (_writtingPad) {
+                        DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
+                    }else {
+                        DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
+                    }
                     // the while loop ensures we get at least a dot from the touch
                     while (![self addLineToAndRenderStroke:currentStroke
                                                    toPoint:preciseLocInView
@@ -1586,7 +1660,7 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                     }
                     
                     // this stroke is now finished, so add it to our completed strokes stack
-                    // and remove it from the current strokes, and reset our undo state if any
+                    // and remove it from the current strokes, and reset our u ndo state if any
                     if ([currentStroke.segments count] == 1 && [[currentStroke.segments firstObject] isKindOfClass:[MoveToPathElement class]]) {
                         // this happen if the entire stroke lands inside of scraps, and nothing makes it to the bottom page
                         // just save an empty stroke to the stack
@@ -1596,7 +1670,7 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 
                 [state finishCurrentStroke];
                 
-                [[JotStrokeManager sharedInstance] removeStrokeForTouch:touch];
+                [strokeManager removeStrokeForTouch:touch];
                 
                 [currentStroke unlock];
                 
@@ -1605,6 +1679,12 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         }
     }
     [JotGLContext validateEmptyContextStack];
+    
+    if (_writtingPad == nil) {
+        if ([self.delegate respondsToSelector:@selector(jotView:touchesEnd:withEvent:)]) {
+            [self.delegate jotView:self touchesEnd:touches withEvent:event];
+        }
+    }
 }
 
 - (void)touchesCancelled:(NSSet*)touches withEvent:(UIEvent*)event {
@@ -1616,7 +1696,7 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         @autoreleasepool {
             // If appropriate, add code necessary to save the state of the application.
             // This application is not saving state.
-            if ([[JotStrokeManager sharedInstance] cancelStrokeForTouch:touch]) {
+            if ([strokeManager cancelStrokeForTouch:touch]) {
                 state.currentStroke = nil;
             }
         }
@@ -1625,6 +1705,12 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     // clear the canvas and rerender all valid strokes
     [self renderAllStrokesToContext:context inFramebuffer:viewFramebuffer andPresentBuffer:YES inRect:CGRectZero];
     [JotGLContext validateEmptyContextStack];
+    
+    if (_writtingPad == nil) {
+        if ([self.delegate respondsToSelector:@selector(jotView:touchesCancelled:withEvent:)]) {
+            [self.delegate jotView:self touchesCancelled:touches withEvent:event];
+        }
+    }
 }
 
 
@@ -1796,24 +1882,37 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
         for (AbstractBezierPathElement* newElement in elements) {
             AbstractBezierPathElement* prevElement = [stroke.segments lastObject];
             AbstractBezierPathElement* element;
-            if (CGSizeEqualToSize(CGSizeZero, ratio.offset) &&
-                CGPointEqualToPoint(CGPointZero, ratio.scale)) {
-                element = newElement;
-            }else {
-                CGPoint ratioPoint = CGPointMake((newElement.startPoint.x) * ratio.scale.x, (newElement.startPoint.y) * ratio.scale.y);
-                ratioPoint = CGPointMake(ratioPoint.x - ratio.offset.width, ratioPoint.y + ratio.offset.height);
-                element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
-                element.color = newElement.color;
-                element.width = newElement.width;
-                element.stepWidth = newElement.stepWidth;
-                element.rotation = prevElement.rotation;
-                [element validateDataGivenPreviousElement:prevElement];
-                if (!element) {
-                    [stroke.texture unbind];
-                    [stroke unlock];
-                    return;
-                }
-            }
+            
+            element = newElement;
+            
+//            if (CGSizeEqualToSize(CGSizeZero, ratio.offset) &&
+//                CGPointEqualToPoint(CGPointZero, ratio.scale)) {
+//                element = newElement;
+//            }else {
+//                CGPoint ratioPoint = CGPointMake((newElement.startPoint.x) * ratio.scale.x, (newElement.startPoint.y) * ratio.scale.y);
+//                ratioPoint = CGPointMake(ratioPoint.x - ratio.offset.width, ratioPoint.y + ratio.offset.height);
+//                element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
+//                element.color = newElement.color;
+//                element.width = newElement.width;
+//                element.stepWidth = newElement.stepWidth;
+//                element.rotation = prevElement.rotation;
+//                [element validateDataGivenPreviousElement:prevElement];
+//                if (!element) {
+//                    NSLog(@"??????????");
+//                    [stroke.texture unbind];
+//                    [stroke unlock];
+//                    return;
+//                }
+            
+                //                while (!element) {
+                //                    element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
+                //                    element.color = newElement.color;
+                //                    element.width = newElement.width;
+                //                    element.stepWidth = newElement.stepWidth;
+                //                    element.rotation = prevElement.rotation;
+                //                    [element validateDataGivenPreviousElement:prevElement];
+                //                }
+//            }
             
             [stroke addElement:element];
             

@@ -39,6 +39,7 @@ typedef struct elementsRatio {
 @property(readonly) CGSize pagePtSize;
 @property(readonly) CGFloat scale;
 
+@property (nonatomic, strong) JotView *writtingPad;
 
 // erase the screen
 - (IBAction)clear:(BOOL)shouldPresent;

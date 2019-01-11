@@ -59,6 +59,8 @@ static JotStrokeManager* _instance = nil;
  * generating multiple current in-progress strokes
  *
  * this method will return the stroke for the given touch
+ * 可以在屏幕上进行多次触摸，生成多个当前正在进行的笔划
+ * 此方法将返回给定触摸的笔划
  */
 - (JotStroke*)getStrokeForTouchHash:(UITouch*)touch {
     for (int i = 0; i < kMaxSimultaneousTouchesAllowedToTrack; i++) {
@@ -79,10 +81,11 @@ static JotStrokeManager* _instance = nil;
 }
 
 - (JotStroke*)makeStrokeForTouchHash:(UITouch*)touch andTexture:(JotBrushTexture*)texture andBufferManager:(JotBufferManager*)bufferManager {
-    JotStroke* ret = [self getStrokeForTouchHash:touch];
-    if (!ret) {
+    
+    JotStroke* ret = [self getStrokeForTouchHash:touch]; // 找在 strokeCache 中有没有
+    if (!ret) {  // 没有 生成一个新的
         ret = [[JotStroke alloc] initWithTexture:texture andBufferManager:bufferManager];
-        for (int i = 0; i < kMaxSimultaneousTouchesAllowedToTrack; i++) {
+        for (int i = 0; i < kMaxSimultaneousTouchesAllowedToTrack; i++) {  // 没懂
             if (strokeCache[i].touchHash == 0) {
                 strokeCache[i].touchHash = touch.hash;
                 strokeCache[i].stroke = ret;
