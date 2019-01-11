@@ -93,6 +93,8 @@ dispatch_queue_t importExportStateQueue;
     CADisplayLink* displayLink;
     
     JotStrokeManager* strokeManager;
+    
+    NSMutableArray* oneStrokeElements;
 }
 
 @end
@@ -173,7 +175,7 @@ static JotGLContext* mainThreadContext;
     exportLaterInvocations = [NSMutableArray array];
     
     validateUndoStateTimer = [[MMWeakTimer alloc] initScheduledTimerWithTimeInterval:kJotValidateUndoTimer target:self selector:@selector(validateUndoState:)];
-    
+    oneStrokeElements = [NSMutableArray array];
     //
     // this view should accept Jot stylus touch events
     [[JotTrashManager sharedInstance] setMaxTickDuration:kJotValidateUndoTimer * 1 / 20];
@@ -1220,6 +1222,7 @@ CGFloat JotBNRTimeBlock(void (^block)(void)) {
             // ok, now we have the current + previous stroke segment
             // so let's set to drawing it!
             [self renderElement:[elements objectAtIndex:i] fromPreviousElement:[elements objectAtIndex:i - 1] includeOpenGLPrepForFBO:viewFramebuffer toContext:context];
+            [oneStrokeElements addObject:[elements objectAtIndex:i]];
         }
         [currentStroke.texture unbind];
         
@@ -1499,11 +1502,11 @@ static int undoCounter;
                 if ([touch respondsToSelector:@selector(preciseLocationInView:)]) {
                     preciseLocInView = [touch preciseLocationInView:jotView];
                 }
-                if (_writtingPad) {
-                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
-                }else {
-                    DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
-                }
+//                if (_writtingPad) {
+//                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
+//                }else {
+//                    DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
+//                }
                 // 添加笔画在界面上
                 [self addLineToAndRenderStroke:newStroke
                                        toPoint:preciseLocInView
@@ -1557,11 +1560,11 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
                     preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
                 }
-                if (_writtingPad) {
-                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
-                }else {
-                    DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
-                }
+//                if (_writtingPad) {
+//                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
+//                }else {
+//                    DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
+//                }
                 // Convert touch point from UIView referential to OpenGL one (upside-down flip)
                 CGPoint glPreciseLocInView = preciseLocInView;
                 glPreciseLocInView.y = self.bounds.size.height - glPreciseLocInView.y;
@@ -1622,6 +1625,8 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     if (!state)
         return;
     
+    NSLog(@"***** touchesEnded");
+    
     for (UITouch* touch in touches) {
         NSArray<UITouch*>* coalesced = [event coalescedTouchesForTouch:touch];
         if (![coalesced count]) {
@@ -1643,11 +1648,11 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                     if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
                         preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
                     }
-                    if (_writtingPad) {
-                        DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
-                    }else {
-                        DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
-                    }
+//                    if (_writtingPad) {
+//                        DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
+//                    }else {
+//                        DebugLog(@"writtingPad location %@",NSStringFromCGPoint(preciseLocInView));
+//                    }
                     // the while loop ensures we get at least a dot from the touch
                     while (![self addLineToAndRenderStroke:currentStroke
                                                    toPoint:preciseLocInView
@@ -1680,6 +1685,10 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     }
     [JotGLContext validateEmptyContextStack];
     
+    if ([self.delegate respondsToSelector:@selector(jotView:strokeEndedWithElements:)]) {
+        [self.delegate jotView:self strokeEndedWithElements:oneStrokeElements];
+    }
+    [oneStrokeElements removeAllObjects];;
     if (_writtingPad == nil) {
         if ([self.delegate respondsToSelector:@selector(jotView:touchesEnd:withEvent:)]) {
             [self.delegate jotView:self touchesEnd:touches withEvent:event];
@@ -1691,7 +1700,7 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     CheckMainThread;
     if (!state)
         return;
-    
+    NSLog(@"***** touchesCancelled");
     for (UITouch* touch in touches) {
         @autoreleasepool {
             // If appropriate, add code necessary to save the state of the application.
@@ -1883,36 +1892,28 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
             AbstractBezierPathElement* prevElement = [stroke.segments lastObject];
             AbstractBezierPathElement* element;
             
-            element = newElement;
+//            element = newElement;
             
-//            if (CGSizeEqualToSize(CGSizeZero, ratio.offset) &&
-//                CGPointEqualToPoint(CGPointZero, ratio.scale)) {
-//                element = newElement;
-//            }else {
-//                CGPoint ratioPoint = CGPointMake((newElement.startPoint.x) * ratio.scale.x, (newElement.startPoint.y) * ratio.scale.y);
-//                ratioPoint = CGPointMake(ratioPoint.x - ratio.offset.width, ratioPoint.y + ratio.offset.height);
-//                element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
-//                element.color = newElement.color;
-//                element.width = newElement.width;
-//                element.stepWidth = newElement.stepWidth;
-//                element.rotation = prevElement.rotation;
-//                [element validateDataGivenPreviousElement:prevElement];
-//                if (!element) {
-//                    NSLog(@"??????????");
+            if (CGSizeEqualToSize(CGSizeZero, ratio.offset) &&
+                CGPointEqualToPoint(CGPointZero, ratio.scale)) {
+                element = newElement;
+            }else {
+                CGPoint ratioPoint = CGPointMake(newElement.startPoint.x * ratio.scale.x, newElement.startPoint.y * ratio.scale.y);
+                ratioPoint = CGPointMake(ratioPoint.x - ratio.offset.width, ratioPoint.y + ratio.offset.height);
+                element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
+                element.color = newElement.color;
+                element.width = newElement.width;
+                element.stepWidth = newElement.stepWidth;
+                element.rotation = prevElement.rotation;
+                [element validateDataGivenPreviousElement:prevElement];
+                if (!element) {
+                    NSLog(@"??????????");
 //                    [stroke.texture unbind];
 //                    [stroke unlock];
 //                    return;
-//                }
-            
-                //                while (!element) {
-                //                    element = [stroke.segmentSmoother addPoint:ratioPoint andSmoothness:newElement.smoothness];
-                //                    element.color = newElement.color;
-                //                    element.width = newElement.width;
-                //                    element.stepWidth = newElement.stepWidth;
-                //                    element.rotation = prevElement.rotation;
-                //                    [element validateDataGivenPreviousElement:prevElement];
-                //                }
-//            }
+                    continue;
+                }
+            }
             
             [stroke addElement:element];
             

@@ -108,4 +108,6 @@
 - (void)jotView:(JotView*)jotView touchesEnd:(NSSet*)touches withEvent:(UIEvent*)event;
 - (void)jotView:(JotView*)jotView touchesCancelled:(NSSet*)touches withEvent:(UIEvent*)event;
 
+- (void)jotView:(JotView*)jotView strokeEndedWithElements:(NSArray *)elements;
+
 @end

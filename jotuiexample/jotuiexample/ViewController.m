@@ -12,12 +12,19 @@
 #import <JotUI/SegmentSmoother.h>
 #import <JotUI/AbstractBezierPathElement-Protected.h>
 
+typedef enum : NSUInteger {
+    DrawingTypeDefault = 1,
+    DrawingTypeWritingPad,
+} DrawingType;
+
 @interface ViewController () <JotViewStateProxyDelegate, UIScrollViewDelegate>
 
 @property (nonatomic, strong)  UIView *highlightView;
 @property (nonatomic, strong)  UIView *line;
 @property (nonatomic, strong)  UIScrollView *jotViewContainer;
 @property (nonatomic, strong)  UIScrollView *displayViewContainer;
+
+@property (nonatomic, assign) DrawingType drawingType;
 
 @end
 
@@ -38,14 +45,49 @@
     highlighter.color = [redButton backgroundColor];
 }
 
-- (void)viewWillAppear:(BOOL)animated {
+static CGFloat topToolBarHeight = 76.f;
 
-    CGFloat topToolBarHeight = 76.f;
-    CGFloat jotViewH = 200.f;
-    CGFloat highlightRatio = 1.f;
+- (void)viewWillAppear:(BOOL)animated {
+    
+//    CGFloat topToolBarHeight = 76.f;
+//    CGFloat jotViewH = 200.f;
+//    CGFloat highlightRatio = 1.f;
     
 //    JotView *view = [[JotView alloc] initWithFrame:CGRectMake(0, 0, 3000, 1000)];
 //    view.frame = CGRectMake(0, 0, 3000, 1000);
+    
+    _drawingType = DrawingTypeDefault;
+    
+    switch (_drawingType) {
+        case DrawingTypeDefault:
+            [self setupDefaultSubview];
+            break;
+            
+        case DrawingTypeWritingPad:
+            [self setupWritingPadSubview];
+            break;
+    }
+}
+
+- (void)setupDefaultSubview
+{
+    if (!displayView) {
+        displayView = [[JotView alloc] initWithFrame:CGRectMake(0, topToolBarHeight, self.view.mj_width, self.view.mj_height - topToolBarHeight)];
+        displayView.delegate = self;
+        [self.view insertSubview:displayView atIndex:0];
+        
+        JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
+        paperState.delegate = self;
+        [paperState loadJotStateAsynchronously:NO withSize:displayView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:displayView.context andBufferManager:[JotBufferManager sharedInstance]];
+        [displayView loadState:paperState];
+    }
+}
+
+- (void)setupWritingPadSubview
+{
+    CGFloat jotViewH = 200.f;
+    CGFloat highlightRatio = 1.f;
+    
     if (!_line) {
         _line = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.bounds.size.height - jotViewH - 1,  self.view.mj_width, 1)];
         _line.backgroundColor = [UIColor blackColor];
@@ -87,7 +129,7 @@
         
         displayView = [[JotView alloc] initWithFrame:_displayViewContainer.bounds];
         displayView.delegate = self;
-        displayView.writtingPad = writtingPad;
+        //        displayView.writtingPad = writtingPad;
         [_displayViewContainer addSubview:displayView];
         
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
@@ -95,16 +137,16 @@
         [paperState loadJotStateAsynchronously:NO withSize:displayView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:displayView.context andBufferManager:[JotBufferManager sharedInstance]];
         [displayView loadState:paperState];
         
-         _displayViewContainer.contentSize = displayView.mj_size;
+        _displayViewContainer.contentSize = displayView.mj_size;
         _displayViewContainer.contentOffset = CGPointZero;
         
-//        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _jotViewContainer.mj_width / highlightRatio, _jotViewContainer.mj_height / highlightRatio)];
-//        _highlightView.layer.borderColor = [UIColor blackColor].CGColor;
-//        _highlightView.layer.borderWidth = 1.0;
-//        [_displayViewContainer addSubview:_highlightView];
-//
-//        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
-//        [_highlightView addGestureRecognizer:pan];
+        _highlightView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _jotViewContainer.mj_width / highlightRatio, _jotViewContainer.mj_height / highlightRatio)];
+        _highlightView.layer.borderColor = [UIColor blackColor].CGColor;
+        _highlightView.layer.borderWidth = 1.0;
+        [_displayViewContainer addSubview:_highlightView];
+        
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(highlightViewPan:)];
+        [_highlightView addGestureRecognizer:pan];
     }
     
     [self.view bringSubviewToFront:additionalOptionsView];
@@ -347,12 +389,13 @@
 
 - (NSArray*)willAddElements:(NSArray*)elements toStroke:(JotStroke*)stroke fromPreviousElement:(AbstractBezierPathElement*)previousElement inJotView:(JotView*)writtingPad {
     
-//    // Project the stroke on the displayView by ratio
-    CGFloat scaleX = _highlightView.bounds.size.width / _jotViewContainer.bounds.size.width;
-    CGFloat scaleY = _highlightView.bounds.size.height / _jotViewContainer.bounds.size.height;
-    JotElementsRatio ratio = {CGSizeZero, CGPointMake(scaleX, scaleY)};
-    
-    [displayView addElements:elements withTexture:[self activePen].textureForStroke];
+    if (_drawingType == DrawingTypeWritingPad) {
+        // Project the stroke on the displayView by ratio
+        CGFloat scaleX = _highlightView.bounds.size.width / _jotViewContainer.bounds.size.width;
+        CGFloat scaleY = _highlightView.bounds.size.height / _jotViewContainer.bounds.size.height;
+        JotElementsRatio ratio = {CGSizeZero, CGPointMake(scaleX, scaleY)};
+        [displayView addElements:elements withTexture:[self activePen].textureForStroke];
+    }
     
     return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:writtingPad];
 }
@@ -368,11 +411,14 @@
 
 - (void)willEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch shortStrokeEnding:(BOOL)shortStrokeEnding inJotView:(JotView*)writtingPad {
     // noop
+    
 }
 
-- (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
-    
-    [displayView.state finishCurrentStroke];
+- (void)didEndStrokeWithCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad
+{
+     if (_drawingType == DrawingTypeWritingPad) {
+         [displayView.state finishCurrentStroke];
+     }
 }
 
 - (void)willCancelStroke:(JotStroke*)stroke withCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
@@ -385,58 +431,19 @@
 
 - (UIColor*)colorForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     [[self activePen] setShouldUseVelocity:!pressureVsVelocityControl || pressureVsVelocityControl.selectedSegmentIndex];
+//    [[self activePen] setShouldUseVelocity: YES];
     return [[self activePen] colorForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
 - (CGFloat)widthForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     [[self activePen] setShouldUseVelocity:!pressureVsVelocityControl || pressureVsVelocityControl.selectedSegmentIndex];
+//    [[self activePen] setShouldUseVelocity: YES];
     return [[self activePen] widthForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
 - (CGFloat)smoothnessForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     return [[self activePen] smoothnessForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
-
-- (void)jotView:(JotView *)jotView touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
-{
-//    if (jotView == writtingPad) {
-//        for (UITouch *touch in touches) {
-//            NSLog(@"%ld",touch.hash);
-//        }
-//        NSLog(@"---------");
-//        NSMutableSet *touch1es = [NSMutableSet set];
-//        for (UITouch *touch in touches) {
-//            UITouch *newTouch = [touch copy];
-//            [touch1es addObject:newTouch];
-//            NSLog(@"%ld",newTouch.hash);
-//        }
-//        NSLog(@"---------");
-//        [displayView touchesBegan:touch1es withEvent:event];
-//    }
-}
-//
-//- (void)jotView:(JotView *)jotView touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
-//{
-//    if (jotView == writtingPad) {
-//        [displayView touchesMoved:touches withEvent:event];
-//    }
-//}
-//
-//- (void)jotView:(JotView *)jotView touchesEnd:(NSSet *)touches withEvent:(UIEvent *)event
-//{
-//    if (jotView == writtingPad) {
-//        [displayView touchesEnded:touches withEvent:event];
-//    }
-//}
-//
-//- (void)jotView:(JotView *)jotView touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event
-//{
-//    if (jotView == writtingPad) {
-//        [displayView touchesCancelled:touches withEvent:event];
-//    }
-//}
-
-
 
 #pragma mark - UIPopoverControllerDelegate
 
