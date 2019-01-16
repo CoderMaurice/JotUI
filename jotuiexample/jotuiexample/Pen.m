@@ -83,8 +83,16 @@ static float clamp(min, max, value) {
 - (CGFloat)velocityForTouch:(UITouch*)touch {
     //
     // first, find the current and previous location of the touch
-    CGPoint l = [touch preciseLocationInView:nil];
-    CGPoint previousPoint = [touch precisePreviousLocationInView:nil];
+    CGPoint l = [touch locationInView:nil];
+    if ([touch respondsToSelector:@selector(preciseLocationInView:)]) {
+        l = [touch preciseLocationInView:nil];
+    }
+    
+    CGPoint previousPoint = [touch previousLocationInView:nil];
+    if ([touch respondsToSelector:@selector(precisePreviousLocationInView:)]) {
+        previousPoint = [touch precisePreviousLocationInView:nil];
+    }
+
     // find how far we've travelled
     float distanceFromPrevious = sqrtf((l.x - previousPoint.x) * (l.x - previousPoint.x) + (l.y - previousPoint.y) * (l.y - previousPoint.y));
     // how long did it take?

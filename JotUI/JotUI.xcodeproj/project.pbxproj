@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		51A0C2A621ED81C300EAE8C8 /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 51A0C2A521ED81C300EAE8C8 /* Photos.framework */; };
 		66018A4819F61F4400228A0D /* DeleteAssets.h in Headers */ = {isa = PBXBuildFile; fileRef = 66018A4719F61F4400228A0D /* DeleteAssets.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		6658ABD01A7B1A1F00F32506 /* JotGLLayerBackedFrameBuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 6658ABCE1A7B1A1F00F32506 /* JotGLLayerBackedFrameBuffer.h */; };
 		6658ABD11A7B1A1F00F32506 /* JotGLLayerBackedFrameBuffer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6658ABCF1A7B1A1F00F32506 /* JotGLLayerBackedFrameBuffer.m */; };
@@ -123,6 +124,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		51A0C2A521ED81C300EAE8C8 /* Photos.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Photos.framework; path = System/Library/Frameworks/Photos.framework; sourceTree = SDKROOT; };
 		66018A4719F61F4400228A0D /* DeleteAssets.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeleteAssets.h; sourceTree = "<group>"; };
 		6622F9D11774E72400C06825 /* JotViewState.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JotViewState.h; sourceTree = "<group>"; };
 		6622F9D21774E72400C06825 /* JotViewState.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = JotViewState.m; sourceTree = "<group>"; };
@@ -254,6 +256,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				51A0C2A621ED81C300EAE8C8 /* Photos.framework in Frameworks */,
 				66AC157D18079B35005315C8 /* UIKit.framework in Frameworks */,
 				66AC155818079A72005315C8 /* Foundation.framework in Frameworks */,
 			);
@@ -317,6 +320,7 @@
 		669B39AB1692B46A00F12F42 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				51A0C2A521ED81C300EAE8C8 /* Photos.framework */,
 				C584F82D1C37B46B00413840 /* GLKit.framework */,
 				66A32026170242D200692C71 /* UIKit.framework */,
 				669B39AC1692B46A00F12F42 /* Foundation.framework */,

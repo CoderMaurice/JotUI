@@ -24,7 +24,6 @@
                 <outlet property="minWidth" destination="204" id="693"/>
                 <outlet property="minWidthDelta" destination="138" id="690"/>
                 <outlet property="penVsMarkerControl" destination="4" id="675"/>
-                <outlet property="pressureVsVelocityControl" destination="153" id="677"/>
                 <outlet property="redButton" destination="562" id="679"/>
                 <outlet property="view" destination="2" id="3"/>
             </connections>
@@ -76,14 +75,6 @@
                             <connections>
                                 <action selector="changeWidthOrSize:" destination="-1" eventType="valueChanged" id="744"/>
                             </connections>
-                        </segmentedControl>
-                        <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="bar" selectedSegmentIndex="0" id="153">
-                            <rect key="frame" x="15" y="20" width="149" height="30"/>
-                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                            <segments>
-                                <segment title="Pressure"/>
-                                <segment title="Velocity"/>
-                            </segments>
                         </segmentedControl>
                         <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="bar" momentary="YES" id="464">
                             <rect key="frame" x="585" y="108" width="172" height="30"/>
@@ -155,7 +146,7 @@
                             <nil key="highlightedColor"/>
                         </label>
                         <button opaque="NO" alpha="0.69999998807907104" contentMode="scaleToFill" selected="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" adjustsImageWhenHighlighted="NO" lineBreakMode="middleTruncation" id="544">
-                            <rect key="frame" x="186" y="20" width="30" height="30"/>
+                            <rect key="frame" x="20" y="20" width="30" height="30"/>
                             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <color key="backgroundColor" red="0.078431372550000003" green="0.078431372550000003" blue="0.078431372550000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                             <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
@@ -171,7 +162,7 @@
                             </connections>
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" adjustsImageWhenHighlighted="NO" lineBreakMode="middleTruncation" id="562">
-                            <rect key="frame" x="226" y="20" width="30" height="30"/>
+                            <rect key="frame" x="60" y="20" width="30" height="30"/>
                             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <color key="backgroundColor" red="0.93725490199999995" green="0.2274509804" blue="0.2784313725" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                             <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
@@ -188,7 +179,7 @@
                             </connections>
                         </button>
                         <button opaque="NO" alpha="0.69999998807907104" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" adjustsImageWhenHighlighted="NO" lineBreakMode="middleTruncation" id="572">
-                            <rect key="frame" x="264" y="20" width="30" height="30"/>
+                            <rect key="frame" x="98" y="20" width="30" height="30"/>
                             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <color key="backgroundColor" red="1" green="0.94512027499999995" blue="0.098317682739999995" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                             <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
@@ -205,7 +196,7 @@
                             </connections>
                         </button>
                         <button opaque="NO" alpha="0.69999998807907104" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" adjustsImageWhenHighlighted="NO" lineBreakMode="middleTruncation" id="577">
-                            <rect key="frame" x="302" y="20" width="30" height="30"/>
+                            <rect key="frame" x="136" y="20" width="30" height="30"/>
                             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <color key="backgroundColor" red="0.21568627450980393" green="0.5725490196078431" blue="0.82352941176470584" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                             <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
@@ -222,7 +213,7 @@
                             </connections>
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" id="721">
-                            <rect key="frame" x="137" y="150" width="73" height="44"/>
+                            <rect key="frame" x="603" y="150" width="73" height="44"/>
                             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
                             <state key="normal" title="Save">
@@ -233,7 +224,7 @@
                             </connections>
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" id="764">
-                            <rect key="frame" x="218" y="150" width="73" height="45"/>
+                            <rect key="frame" x="684" y="150" width="73" height="45"/>
                             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
                             <state key="normal" title="Load">
@@ -241,6 +232,39 @@
                             </state>
                             <connections>
                                 <action selector="loadImageFromLibary:" destination="-1" eventType="touchUpInside" id="767"/>
+                            </connections>
+                        </button>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" id="BUv-6V-ezr">
+                            <rect key="frame" x="53" y="150" width="73" height="44"/>
+                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
+                            <state key="normal" title="Theme">
+                                <color key="titleShadowColor" red="0.5" green="0.5" blue="0.5" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </state>
+                            <connections>
+                                <action selector="themeChange:" destination="-1" eventType="touchUpInside" id="y6p-2u-Xsv"/>
+                            </connections>
+                        </button>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" id="MLA-WW-qlz">
+                            <rect key="frame" x="134" y="150" width="73" height="44"/>
+                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
+                            <state key="normal" title="Image">
+                                <color key="titleShadowColor" red="0.5" green="0.5" blue="0.5" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </state>
+                            <connections>
+                                <action selector="addImage:" destination="-1" eventType="touchUpInside" id="uku-yW-tOl"/>
+                            </connections>
+                        </button>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" id="mqR-FJ-tfM">
+                            <rect key="frame" x="215" y="150" width="73" height="44"/>
+                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            <fontDescription key="fontDescription" type="boldSystem" pointSize="15"/>
+                            <state key="normal" title="Text">
+                                <color key="titleShadowColor" red="0.5" green="0.5" blue="0.5" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </state>
+                            <connections>
+                                <action selector="addText:" destination="-1" eventType="touchUpInside" id="0uy-dO-3wH"/>
                             </connections>
                         </button>
                     </subviews>

@@ -107,12 +107,12 @@ dispatch_queue_t importExportStateQueue;
 @synthesize maxStrokeSize;
 @synthesize state;
 
-- (void)setWrittingPad:(JotView *)writtingPad
-{
-    _writtingPad = writtingPad;
-    
-    self.userInteractionEnabled = NO;
-}
+//- (void)setWrittingPad:(JotView *)writtingPad
+//{
+//    _writtingPad = writtingPad;
+//    
+//    self.userInteractionEnabled = NO;
+//}
 
 #pragma mark - Initialization
 
@@ -1496,11 +1496,11 @@ static int undoCounter;
                 state.currentStroke = newStroke; // 设置为当前笔画
                 
                 // find the stroke that we're modifying, and then add an element and render it
-                JotView *jotView = _writtingPad ?: self;
+
                 // 从touch中取出笔画的位置
-                CGPoint preciseLocInView = [touch locationInView:jotView];
+                CGPoint preciseLocInView = [touch locationInView:self];
                 if ([touch respondsToSelector:@selector(preciseLocationInView:)]) {
-                    preciseLocInView = [touch preciseLocationInView:jotView];
+                    preciseLocInView = [touch preciseLocationInView:self];
                 }
 //                if (_writtingPad) {
 //                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
@@ -1519,11 +1519,10 @@ static int undoCounter;
     }
     [JotGLContext validateEmptyContextStack];
     
-    if (_writtingPad == nil) {
         if ([self.delegate respondsToSelector:@selector(jotView:touchesBegan:withEvent:)]) {
             [self.delegate jotView:self touchesBegan:touches withEvent:event];
         }
-    }
+    
 }
 
 /**
@@ -1555,10 +1554,9 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 // for this example, we'll simply draw every touch if
                 // the jot sdk is not enabled
                 
-                JotView *jotView = _writtingPad ?: self;
-                CGPoint preciseLocInView = [coalescedTouch locationInView:jotView];
+                CGPoint preciseLocInView = [coalescedTouch locationInView:self];
                 if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
-                    preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
+                    preciseLocInView = [coalescedTouch preciseLocationInView:self];
                 }
 //                if (_writtingPad) {
 //                    DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
@@ -1592,10 +1590,9 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 }
                 
                 if (currentStroke && !shouldSkipSegment) {
-                         JotView *jotView = _writtingPad ?: self;
-                    CGPoint preciseLocInView = [coalescedTouch locationInView:jotView];
+                    CGPoint preciseLocInView = [coalescedTouch locationInView:self];
                     if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
-                        preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
+                        preciseLocInView = [coalescedTouch preciseLocationInView:self];
                     }
                     
                     // find the stroke that we're modifying, and then add an element and render it
@@ -1614,11 +1611,10 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     }
     [JotGLContext validateEmptyContextStack];
     
-    if (_writtingPad == nil) {
         if ([self.delegate respondsToSelector:@selector(jotView:touchesMoved:withEvent:)]) {
             [self.delegate jotView:self touchesMoved:touches withEvent:event];
         }
-    }
+    
 }
 
 - (void)touchesEnded:(NSSet*)touches withEvent:(UIEvent*)event {
@@ -1643,10 +1639,9 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
                 // now line to the end of the stroke
                 for (UITouch* coalescedTouch in coalesced) {
                     // now line to the end of the stroke
-                    JotView *jotView = _writtingPad ?: self;
-                    CGPoint preciseLocInView = [coalescedTouch locationInView:jotView];
+                    CGPoint preciseLocInView = [coalescedTouch locationInView:self];
                     if ([coalescedTouch respondsToSelector:@selector(preciseLocationInView:)]) {
-                        preciseLocInView = [coalescedTouch preciseLocationInView:jotView];
+                        preciseLocInView = [coalescedTouch preciseLocationInView:self];
                     }
 //                    if (_writtingPad) {
 //                        DebugLog(@"display location %@",NSStringFromCGPoint(preciseLocInView));
@@ -1688,12 +1683,11 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     if ([self.delegate respondsToSelector:@selector(jotView:strokeEndedWithElements:)]) {
         [self.delegate jotView:self strokeEndedWithElements:oneStrokeElements];
     }
-    [oneStrokeElements removeAllObjects];;
-    if (_writtingPad == nil) {
+    [oneStrokeElements removeAllObjects];
         if ([self.delegate respondsToSelector:@selector(jotView:touchesEnd:withEvent:)]) {
             [self.delegate jotView:self touchesEnd:touches withEvent:event];
         }
-    }
+    
 }
 
 - (void)touchesCancelled:(NSSet*)touches withEvent:(UIEvent*)event {
@@ -1715,11 +1709,10 @@ static inline CGFloat distanceBetween2(CGPoint a, CGPoint b) {
     [self renderAllStrokesToContext:context inFramebuffer:viewFramebuffer andPresentBuffer:YES inRect:CGRectZero];
     [JotGLContext validateEmptyContextStack];
     
-    if (_writtingPad == nil) {
         if ([self.delegate respondsToSelector:@selector(jotView:touchesCancelled:withEvent:)]) {
             [self.delegate jotView:self touchesCancelled:touches withEvent:event];
         }
-    }
+    
 }
 
 

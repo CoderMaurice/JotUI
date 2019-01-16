@@ -26,9 +26,7 @@
     
     UIPopoverController* popoverController;
     
-    IBOutlet UISegmentedControl* pressureVsVelocityControl;
     IBOutlet UISegmentedControl* penVsMarkerControl;
-    
     
     IBOutlet UILabel* minAlpha;
     IBOutlet UILabel* maxAlpha;

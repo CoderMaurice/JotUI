@@ -12,14 +12,24 @@
 #import <JotUI/SegmentSmoother.h>
 #import <JotUI/AbstractBezierPathElement-Protected.h>
 
+#import "TZImagePickerController.h"
+
 #import "EBWriteBackgrounds.h"
+#import "EBWrittingScrapImageView.h"
+#import "EBWrittingScrapTextView.h"
+#import "EBWrittingScrapImageState.h"
+#import "EBWrittingScrapTextState.h"
 
 typedef enum : NSUInteger {
     DrawingTypeDefault = 1,
     DrawingTypeWritingPad,
 } DrawingType;
 
-@interface ViewController () <JotViewStateProxyDelegate, UIScrollViewDelegate>
+@interface ViewController () <JotViewStateProxyDelegate, UIScrollViewDelegate, TZImagePickerControllerDelegate, EBWrittingScrapStateDelegate>
+
+@property (nonatomic, strong) MMPaperTemplateView *background;
+@property (nonatomic, strong) NSArray *backgroundThemes;
+@property (nonatomic, assign) NSInteger themeIndex;
 
 @property (nonatomic, strong)  UIView *highlightView;
 @property (nonatomic, strong)  UIView *line;
@@ -28,10 +38,32 @@ typedef enum : NSUInteger {
 
 @property (nonatomic, assign) DrawingType drawingType;
 
+
+@property (nonatomic, strong) NSMutableArray<EBWrittingScrapState *> *scrapStates;
+@property (nonatomic, strong) EBWrittingScrapView *activatedScrapView;
+@property (nonatomic, strong) UITapGestureRecognizer *scarpResignActiveTap;
+
+
 @end
 
 
 @implementation ViewController
+
+- (NSMutableArray<EBWrittingScrapState *> *)scrapStates
+{
+    if (!_scrapStates) {
+        _scrapStates = [NSMutableArray array];
+    }
+    return _scrapStates;
+}
+
+- (NSArray *)backgroundThemes
+{
+    if (!_backgroundThemes) {
+        _backgroundThemes = @[[MMEmptyTemplateView class], [MMCmDotsTemplateView class], [MMCmGridTemplateView class]];
+    }
+    return _backgroundThemes;
+}
 
 #pragma mark - UIViewController
 
@@ -45,6 +77,8 @@ typedef enum : NSUInteger {
     pen.color = [blackButton backgroundColor];
     highlighter = [[Highlighter alloc] init];
     highlighter.color = [redButton backgroundColor];
+    
+     _themeIndex = 0;
 }
 
 static CGFloat topToolBarHeight = 76.f;
@@ -62,19 +96,44 @@ static CGFloat topToolBarHeight = 76.f;
             [self setupWritingPadSubview];
             break;
     }
+    
+    [self.view bringSubviewToFront:additionalOptionsView];
 }
 
 - (void)setupDefaultSubview
 {
-    if (!displayView) {
-        displayView = [[JotView alloc] initWithFrame:CGRectMake(0, topToolBarHeight, self.view.mj_width, self.view.mj_height - topToolBarHeight)];
+    if (!_displayViewContainer) {
+        
+        CGRect frame = CGRectMake(0, topToolBarHeight, self.view.mj_width, self.view.mj_height - topToolBarHeight);
+        
+        _displayViewContainer = [[UIScrollView alloc] initWithFrame:frame];
+        _displayViewContainer.scrollEnabled = NO;
+        [self.view addSubview:_displayViewContainer];
+        
+        displayView = [[JotView alloc] initWithFrame:_displayViewContainer.bounds];
         displayView.delegate = self;
-        [self.view insertSubview:displayView atIndex:0];
+        [_displayViewContainer addSubview:displayView];
         
         JotViewStateProxy* paperState = [[JotViewStateProxy alloc] initWithDelegate:self];
         paperState.delegate = self;
         [paperState loadJotStateAsynchronously:NO withSize:displayView.bounds.size andScale:[[UIScreen mainScreen] scale] andContext:displayView.context andBufferManager:[JotBufferManager sharedInstance]];
         [displayView loadState:paperState];
+        
+        _displayViewContainer.contentSize = displayView.mj_size;
+        _displayViewContainer.contentOffset = CGPointZero;
+        
+        _background = [[self.backgroundThemes[_themeIndex] alloc] initWithFrame:_displayViewContainer.bounds
+                                                                andOriginalSize:_displayViewContainer.bounds.size
+                                                                  andProperties:@{}];
+        [_displayViewContainer addSubview:_background];
+        _themeIndex ++;
+        [_displayViewContainer sendSubviewToBack:_background];
+        
+        
+        UILongPressGestureRecognizer*longpress = [[UILongPressGestureRecognizer alloc]
+                                                  initWithTarget:self
+                                                  action:@selector(displayViewLongPress:)];
+        [displayView addGestureRecognizer:longpress];
     }
 }
 
@@ -323,6 +382,45 @@ static CGFloat topToolBarHeight = 76.f;
     }
 }
 
+- (IBAction)themeChange:(id)sender
+{
+    if (_themeIndex > self.backgroundThemes.count - 1) {
+        _themeIndex = 0;
+    }
+    
+    CGRect frame = _background.frame;
+    [_background removeFromSuperview];
+    _background = nil;
+    
+    _background = [[self.backgroundThemes[_themeIndex] alloc] initWithFrame:frame
+                                                            andOriginalSize:frame.size
+                                                              andProperties:@{}];
+    [_displayViewContainer addSubview:_background];
+    [_displayViewContainer sendSubviewToBack:_background];
+    
+    _themeIndex++;
+}
+- (IBAction)addImage:(id)sender
+{
+    additionalOptionsView.hidden = YES;
+    
+    [self selectImage];
+}
+
+- (IBAction)addText:(id)sender
+{
+    additionalOptionsView.hidden = YES;
+    
+    EBWrittingScrapTextView *textScrap = [[EBWrittingScrapTextView alloc] init];
+    [_displayViewContainer addSubview:textScrap];
+    textScrap.center = CGPointMake(_displayViewContainer.mj_width / 2, _displayViewContainer.mj_height / 2);
+    [self letScrap:textScrap bcomeActivate:YES];
+    
+    EBWrittingScrapTextState *state = [[EBWrittingScrapTextState alloc] initWithScrap:textScrap];
+    state.delegate = self;
+    [self.scrapStates addObject:state];
+}
+
 #pragma mark - Jot Stylus Button Callbacks
 
 - (void)nextColor {
@@ -394,7 +492,7 @@ static CGFloat topToolBarHeight = 76.f;
         CGFloat scaleX = _highlightView.bounds.size.width / _jotViewContainer.bounds.size.width;
         CGFloat scaleY = _highlightView.bounds.size.height / _jotViewContainer.bounds.size.height;
         JotElementsRatio ratio = {CGSizeZero, CGPointMake(scaleX, scaleY)};
-        [displayView addElements:elements withTexture:[self activePen].textureForStroke];
+        [displayView addElements:elements withTexture:[self activePen].textureForStroke ratio:ratio];
     }
     
     return [[self activePen] willAddElements:elements toStroke:stroke fromPreviousElement:previousElement inJotView:writtingPad];
@@ -431,19 +529,27 @@ static CGFloat topToolBarHeight = 76.f;
 }
 
 - (UIColor*)colorForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
-    [[self activePen] setShouldUseVelocity:!pressureVsVelocityControl || pressureVsVelocityControl.selectedSegmentIndex];
-//    [[self activePen] setShouldUseVelocity: YES];
+    [[self activePen] setShouldUseVelocity: YES];
     return [[self activePen] colorForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
 - (CGFloat)widthForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
-    [[self activePen] setShouldUseVelocity:!pressureVsVelocityControl || pressureVsVelocityControl.selectedSegmentIndex];
-//    [[self activePen] setShouldUseVelocity: YES];
+    [[self activePen] setShouldUseVelocity: YES];
     return [[self activePen] widthForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
 }
 
 - (CGFloat)smoothnessForCoalescedTouch:(UITouch*)coalescedTouch fromTouch:(UITouch*)touch inJotView:(JotView*)writtingPad {
     return [[self activePen] smoothnessForCoalescedTouch:coalescedTouch fromTouch:touch inJotView:writtingPad];
+}
+
+- (void)jotView:(JotView *)jotView touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
+{
+    additionalOptionsView.hidden = YES;
+}
+
+- (void)jotView:(JotView *)jotView touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
+{
+    [self letScrap:_activatedScrapView bcomeActivate:NO];
 }
 
 #pragma mark - UIPopoverControllerDelegate
@@ -544,14 +650,15 @@ static CGFloat topToolBarHeight = 76.f;
 // no background, then it will be exported portrait
 - (void)exportVisiblePage:(void (^)(NSURL* urlToImage))completionBlock
      startingContextBlock:(CGContextRef (^)(CGRect finalExportBounds, CGFloat scale, CGFloat defaultRotation))startContextBlock
-       endingContextBlock:(NSURL* (^)())endContextBlock{
+       endingContextBlock:(NSURL* (^)(void))endContextBlock{
     
-    UIImage* backgroundImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"test_bg" ofType:@"jpg"]];
+//    UIImage* backgroundImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"test_bg" ofType:@"jpg"]];
+    UIImage* backgroundImage = nil;
     
     // default the page size to the screen dimensions in PDF ppi.
     CGSize screenSize = [[[UIScreen mainScreen] fixedCoordinateSpace] bounds].size;
     __block CGRect finalExportBounds = CGRectFromSize(screenSize);
-    CGSize backgroundSize = CGSizeZero;
+//    CGSize backgroundSize = CGSizeZero;
     CGFloat defaultRotation = 0;
     CGFloat scale = [[UIScreen mainScreen] scale];
     
@@ -623,35 +730,35 @@ static CGFloat topToolBarHeight = 76.f;
 
                 
                 
-//            if (backgroundImage) {
-//                    // image background
-//                    CGContextSaveThenRestoreForBlock(context, ^{
-//                        CGRect rectForImage = CGRectMake(0, 0, finalExportBounds.size.width, finalExportBounds.size.height);
-//                        [backgroundImage drawInRect:rectForImage];
-//                    });
-//                } else if(_ruledOrGridBackgroundView){
-//                    [_ruledOrGridBackgroundView drawInContext:context forSize:finalExportBounds.size];
-//                }
+                if (backgroundImage) {
+                    // image background
+                    CGContextSaveThenRestoreForBlock(context, ^{
+                        CGRect rectForImage = CGRectMake(0, 0, finalExportBounds.size.width, finalExportBounds.size.height);
+                        [backgroundImage drawInRect:rectForImage];
+                    });
+                } else if(self.background){
+                    [self.background drawInContext:context forSize:finalExportBounds.size];
+                }
                 
-                MMTodoListTemplateView *todoBG = [[MMTodoListTemplateView alloc] initWithFrame:finalExportBounds andOriginalSize:finalExportBounds.size andProperties:@{}];
-                [todoBG drawInContext:context forSize:finalExportBounds.size];
-                
-//                if(backgroundSize.width > backgroundSize.height){
-//                    // if the background is landscape, then we need to rotate our
-//                    // canvas so that the landscape PDF is drawn on our
-//                    // vertical canvas properly.
-//                    CGFloat theta = 90.0 * M_PI / 180.0;
-//                    if([self usesCorrectBackgroundRotation]){
-//                        theta = -theta;
-//                    }
-//
-//                    CGContextTranslateCTM(context, finalExportBounds.size.width / 2, finalExportBounds.size.height / 2);
-//                    CGContextRotateCTM(context, theta);
-//
-//                    finalExportBounds = CGRectSwap(finalExportBounds);
-//
-//                    CGContextTranslateCTM(context, -finalExportBounds.size.width / 2, -finalExportBounds.size.height / 2);
-//                }
+                CGContextSaveThenRestoreForBlock(context, ^{
+                    // Scraps
+                    // adjust so that (0,0) is the origin of the content rect in the PDF page,
+                    // since the PDF may be much taller/wider than our screen
+                    CGContextTranslateCTM(context, -finalExportBounds.origin.x, -finalExportBounds.origin.y);
+                    
+                    //                    for (MMScrapView* scrap in immutableScrapState.scraps) {
+                    //                        [self drawScrap:scrap intoContext:context withSize:screenSize];
+                    //                    }
+                    CGContextSaveThenRestoreForBlock(context, ^{
+                        for (EBWrittingScrapState *state in self.scrapStates) {
+                            if ([state.scrapView isKindOfClass:[EBWrittingScrapImageView class]]) {
+                                EBWrittingScrapImageView *imageScrap = (EBWrittingScrapImageView *)state.scrapView;
+                                [imageScrap.image drawInRect:imageScrap.frame];
+                            }
+                            
+                        }
+                    });
+                });
                 
                 CGContextSaveThenRestoreForBlock(context, ^{
                     // flip context
@@ -665,12 +772,6 @@ static CGFloat topToolBarHeight = 76.f;
                     CGContextDrawImage(context, CGRectFromSize(screenSize), [image CGImage]);
                 });
                 
-                CGContextSaveThenRestoreForBlock(context, ^{
-                    // Scraps
-                    // adjust so that (0,0) is the origin of the content rect in the PDF page,
-                    // since the PDF may be much taller/wider than our screen
-                    CGContextTranslateCTM(context, -finalExportBounds.origin.x, -finalExportBounds.origin.y);
-                });
             });
             
             NSURL* fullyRenderedPDFURL = endContextBlock();
@@ -690,6 +791,91 @@ static CGFloat topToolBarHeight = 76.f;
         completionBlock(nil);
 }
 
+- (void)selectImage
+{
+    TZImagePickerController *imagePickerVc = [[TZImagePickerController alloc] initWithMaxImagesCount:1 delegate:self];
+    imagePickerVc.allowPickingOriginalPhoto = YES;
+    [self presentViewController:imagePickerVc animated:YES completion:nil];
+}
 
+- (void)imagePickerController:(TZImagePickerController *)picker didFinishPickingPhotos:(NSArray<UIImage *> *)photos sourceAssets:(NSArray *)assets isSelectOriginalPhoto:(BOOL)isSelectOriginalPhoto
+{
+    if (photos.count) {
+        UIImage *returnImage = [photos firstObject];
+     
+        EBWrittingScrapImageView *imageScrap = [[EBWrittingScrapImageView alloc] initWithImage:returnImage];
+        [_displayViewContainer addSubview:imageScrap];
+        imageScrap.center = CGPointMake(_displayViewContainer.mj_width / 2, _displayViewContainer.mj_height / 2);
+        [self letScrap:imageScrap bcomeActivate:YES];
+        
+        EBWrittingScrapImageState *state = [[EBWrittingScrapImageState alloc] initWithScrap:imageScrap];
+        state.delegate = self;
+        state.index = self.scrapStates.count;
+        [self.scrapStates addObject:state];
+    }
+}
+
+#pragma mark - EBWrittingScrapStateDelegate
+
+- (void)scrapDidBecomeActive:(EBWrittingScrapState *)state
+{
+    [_displayViewContainer bringSubviewToFront:state.scrapView];
+}
+
+- (void)scrapDidResignActive:(EBWrittingScrapState *)state
+{
+    
+    [_displayViewContainer insertSubview:state.scrapView atIndex:[self.scrapStates indexOfObject:state] + 1];
+}
+
+- (void)scrapPerformClose:(EBWrittingScrapState *)state
+{
+    
+}
+
+
+- (void)displayViewLongPress:(UIPanGestureRecognizer *)recognizer
+{
+    if (recognizer.state == UIGestureRecognizerStateBegan) {
+        NSLog(@"longPress");
+        if (_activatedScrapView) {
+            [self letScrap:_activatedScrapView bcomeActivate:NO];
+        }
+        
+        CGPoint location = [recognizer locationInView:recognizer.view];
+        NSArray* reversedArray = [[self.scrapStates reverseObjectEnumerator] allObjects];
+        for (EBWrittingScrapImageState *state in reversedArray) {
+            BOOL intersect = CGRectIntersectsRect((CGRect){location, CGSizeMake(0.1, 0.1)}, state.scrapView.frame);
+            if (intersect) {
+                [self letScrap:state.scrapView bcomeActivate:YES];
+                return;
+            }
+        }
+    }
+}
+
+- (void)displayViewTap:(UITapGestureRecognizer *)recognizer
+{
+    [self letScrap:_activatedScrapView bcomeActivate:NO];
+}
+
+- (void)letScrap:(EBWrittingScrapView *)scarp bcomeActivate:(BOOL)active
+{
+    if (active == scarp.active) return;
+    if (active) {
+        _activatedScrapView = scarp;
+        [scarp becomeActivate:YES];
+        if (!_scarpResignActiveTap) {
+            _scarpResignActiveTap = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self
+                                     action:@selector(displayViewTap:)];
+        }
+        [displayView addGestureRecognizer:_scarpResignActiveTap];
+    }else {
+        _activatedScrapView = nil;
+        [scarp becomeActivate:NO];
+        [displayView removeGestureRecognizer:_scarpResignActiveTap];
+    }
+}
 
 @end
